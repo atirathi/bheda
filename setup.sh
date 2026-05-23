@@ -2,40 +2,85 @@
 set -euo pipefail
 
 # ╔══════════════════════════════════════════════════════════════╗
-# ║  Bheda — One-Click Setup                                   ║
-# ║  Run: curl -fsSL https://raw.githubusercontent.com/          ║
-# ║    atirathi/bheda/master/setup.sh | bash                    ║
+# ║  Bheda — One-Click Setup (Windows / Linux / macOS)         ║
+# ║                                                             ║
+# ║  Run:                                                       ║
+# ║    curl -fsSL https://raw.githubusercontent.com/             ║
+# ║      atirathi/bheda/master/setup.sh | bash                  ║
 # ╚══════════════════════════════════════════════════════════════╝
 
 REPO_URL="https://github.com/atirathi/bheda.git"
 INSTALL_DIR="${HOME}/bheda"
+TARGET_SERVICES=27
 
-GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
+GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; CYAN='\033[0;36m'; NC='\033[0m'
 log()  { echo -e "${GREEN}[✓]${NC} $1"; }
 warn() { echo -e "${YELLOW}[!]${NC} $1"; }
 fail() { echo -e "${RED}[✗]${NC} $1"; exit 1; }
+info() { echo -e "${CYAN}[i]${NC} $1"; }
 
-OS="$(uname -s)"
+RAW_OS="$(uname -s)"
+ARCH="$(uname -m)"
 
-detect_package_manager() {
+# ─── Platform Detection ─────────────────────────────────────────
+
+IS_WSL=false
+IS_GITBASH=false
+IS_MAC=false
+IS_LINUX=false
+
+case "$RAW_OS" in
+  Linux)
+    if grep -qi microsoft /proc/version 2>/dev/null || grep -qi wsl /proc/version 2>/dev/null; then
+      IS_WSL=true
+    fi
+    IS_LINUX=true
+    ;;
+  Darwin)
+    IS_MAC=true
+    ;;
+  MINGW*|MSYS*|CYGWIN*)
+    IS_GITBASH=true
+    ;;
+esac
+
+# ─── Cleanup handler ────────────────────────────────────────────
+
+cleanup() {
+  echo ""
+  warn "Setup interrupted. Cleaning up..."
+  if [ -d "$INSTALL_DIR" ] && [ -f "$INSTALL_DIR/docker-compose.yml" ]; then
+    cd "$INSTALL_DIR" && docker compose down 2>/dev/null || true
+  fi
+  info "Partial state cleaned. Re-run the script to continue."
+  exit 1
+}
+trap cleanup SIGINT SIGTERM
+
+# ─── Package Manager ────────────────────────────────────────────
+
+detect_pm() {
   if command -v apt &>/dev/null; then echo "apt"
   elif command -v dnf &>/dev/null; then echo "dnf"
   elif command -v yum &>/dev/null; then echo "yum"
   elif command -v pacman &>/dev/null; then echo "pacman"
   elif command -v brew &>/dev/null; then echo "brew"
-  else echo "unknown"; fi
+  else echo "none"; fi
 }
 
+# ─── Docker Install — Linux ─────────────────────────────────────
+
 install_docker_linux() {
-  local pm
-  pm=$(detect_package_manager)
+  local pm; pm=$(detect_pm)
   case "$pm" in
     apt)
       sudo apt update && sudo apt install -y ca-certificates curl gnupg
       sudo install -m 0755 -d /etc/apt/keyrings
       curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
         | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-      echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" \
+      . /etc/os-release
+      echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+        https://download.docker.com/linux/ubuntu ${UBUNTU_CODENAME:-$VERSION_CODENAME} stable" \
         | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
       sudo apt update && sudo apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
       ;;
@@ -45,62 +90,120 @@ install_docker_linux() {
       sudo dnf -y install docker-ce docker-ce-cli containerd.io docker-compose-plugin
       ;;
     pacman)
-      sudo pacman -Sy --noconfirm docker docker-compose
+      sudo pacman -Syu --noconfirm docker docker-compose
       ;;
     *)
-      fail "No supported package manager found. Install Docker manually: https://docs.docker.com/engine/install/"
+      fail "No supported package manager. Install Docker manually: https://docs.docker.com/engine/install/"
       ;;
   esac
-  sudo systemctl enable docker && sudo systemctl start docker
-  sudo usermod -aG docker "$USER"
-  warn "You may need to log out and back in for docker group to take effect."
+
+  if command -v systemctl &>/dev/null; then
+    sudo systemctl enable docker && sudo systemctl start docker
+  else
+    warn "systemctl not found — start Docker manually: sudo dockerd &"
+  fi
+  sudo usermod -aG docker "$USER" 2>/dev/null || true
+  warn "Log out and back in for docker group to take effect (or run: newgrp docker)"
 }
+
+# ─── Docker Install — macOS ─────────────────────────────────────
 
 install_docker_macos() {
   if ! command -v brew &>/dev/null; then
-    warn "Installing Homebrew..."
+    info "Installing Homebrew..."
     /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    if [ "$ARCH" = "arm64" ]; then
+      echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> "$HOME/.zprofile"
+      eval "$(/opt/homebrew/bin/brew shellenv)"
+    fi
   fi
+
   if ! command -v docker &>/dev/null; then
     brew install --cask docker
-    warn "Open Docker.app from /Applications and wait for the engine to start."
-    open /Applications/Docker.app
-    echo "Waiting for Docker to start... (this may take a minute)"
-    until docker info &>/dev/null; do sleep 2; done
+    warn "Opening Docker Desktop installer. Complete the wizard, then return here."
+    if [ -n "${DISPLAY:-}" ] || [ -n "${CI:-}" ]; then
+      open /Applications/Docker.app 2>/dev/null || true
+    fi
+    info "Waiting for Docker to start (up to 90s)..."
+    for i in $(seq 1 45); do
+      if docker info &>/dev/null 2>&1; then log "Docker is running."; return 0; fi
+      sleep 2
+    done
+    fail "Docker Desktop did not start. Open Docker.app manually and re-run."
   fi
 }
 
-install_docker_windows() {
-  warn "Windows detected — please ensure Docker Desktop is installed."
-  warn "Download from: https://www.docker.com/products/docker-desktop"
-  warn "Also install Git Bash from: https://git-scm.com/download/win"
-  warn ""
-  warn "After installing both, run this script again from Git Bash."
-  exit 0
+# ─── Docker Install — Windows (Git Bash) ────────────────────────
+
+install_docker_windows_gitbash() {
+  warn "Docker Desktop is required."
+  info "Opening download page..."
+  if command -v start &>/dev/null; then
+    start https://www.docker.com/products/docker-desktop
+  fi
+  echo ""
+  read -rp "Press Enter after installing Docker Desktop and Git for Windows..."
+  if ! command -v docker &>/dev/null; then
+    fail "Docker not found. Add it to PATH and re-run."
+  fi
 }
+
+# ─── Docker Install — WSL ───────────────────────────────────────
+
+install_docker_wsl() {
+  info "WSL detected — installing Docker Engine inside WSL."
+  install_docker_linux
+  # WSL can also use Docker Desktop for Windows
+  if command -v docker.exe &>/dev/null; then
+    warn "Docker Desktop (Windows) is available. You can also use:"
+    warn "  export DOCKER_HOST=tcp://localhost:2375"
+    info "Falling back to native Docker Engine in WSL for now."
+  fi
+}
+
+# ─── Docker — Main Installer ────────────────────────────────────
 
 install_docker() {
-  if command -v docker &>/dev/null && docker info &>/dev/null; then
-    log "Docker already installed and running."
-    return
+  if docker info &>/dev/null 2>&1; then
+    log "Docker is already installed and running."
+    return 0
   fi
-  log "Installing Docker..."
-  case "$OS" in
-    Linux)   install_docker_linux ;;
-    Darwin)  install_docker_macos ;;
-    *)       install_docker_windows ;;
-  esac
-  log "Docker installed successfully."
+
+  if command -v docker &>/dev/null; then
+    warn "Docker is installed but not running. Starting..."
+    if [ "$IS_WSL" = true ]; then
+      sudo dockerd &>/dev/null &
+      WAIT_PID=$!
+    elif [ "$IS_MAC" = true ]; then
+      open /Applications/Docker.app 2>/dev/null || true
+    fi
+    for i in $(seq 1 30); do
+      if docker info &>/dev/null 2>&1; then log "Docker started."; return 0; fi
+      sleep 3
+    done
+    fail "Docker is installed but won't start. Start it manually and re-run."
+  fi
+
+  info "Installing Docker..."
+  if [ "$IS_GITBASH" = true ]; then
+    install_docker_windows_gitbash
+  elif [ "$IS_WSL" = true ]; then
+    install_docker_wsl
+  elif [ "$IS_MAC" = true ]; then
+    install_docker_macos
+  elif [ "$IS_LINUX" = true ]; then
+    install_docker_linux
+  else
+    fail "Unsupported platform. Install Docker manually: https://docs.docker.com/engine/install/"
+  fi
+
+  if ! docker info &>/dev/null 2>&1; then
+    fail "Docker did not start. Run setup.sh again after starting it."
+  fi
+  log "Docker ready."
 }
 
-ensure_docker_running() {
-  local max_attempts=30
-  for i in $(seq 1 $max_attempts); do
-    if docker info &>/dev/null; then return 0; fi
-    sleep 2
-  done
-  fail "Docker did not start. Please start Docker manually and re-run."
-}
+# ─── Repo ───────────────────────────────────────────────────────
 
 clone_repo() {
   if [ -d "$INSTALL_DIR" ]; then
@@ -111,80 +214,95 @@ clone_repo() {
     git clone "$REPO_URL" "$INSTALL_DIR"
     cd "$INSTALL_DIR"
   fi
+  cd "$INSTALL_DIR"
 }
+
+# ─── Environment ────────────────────────────────────────────────
 
 setup_env() {
   if [ ! -f .env ]; then
-    log "Creating .env from .env.example..."
     cp .env.example .env
+    log ".env created from .env.example"
   else
     warn ".env already exists — skipping."
   fi
 }
+
+# ─── TLS Certs ──────────────────────────────────────────────────
 
 generate_certs() {
   if [ -f tls-lab/certs/self-signed/server.crt ]; then
     log "TLS certificates already exist — skipping."
     return
   fi
+  if ! command -v openssl &>/dev/null; then
+    warn "OpenSSL not found — skipping TLS cert generation (TLS lab won't work)."
+    return
+  fi
   log "Generating TLS certificates..."
   chmod +x scripts/gen-certs.sh
-  ./scripts/gen-certs.sh || warn "Cert generation failed (non-fatal — TLS lab may not work)."
+  bash scripts/gen-certs.sh || warn "Cert generation had issues (non-fatal)."
 }
 
+# ─── Docker Compose ─────────────────────────────────────────────
+
 start_services() {
-  log "Building and starting all services (27 containers)..."
-  warn "This may take 5-15 minutes on first run (downloading images + building)."
+  log "Building and starting ${TARGET_SERVICES} containers..."
+  warn "First run: 5-15 min (downloading images + compiling)."
+  warn "Subsequent runs: ~30 seconds."
   docker compose up -d --build
 }
 
+# ─── Health Check ───────────────────────────────────────────────
+
 wait_for_health() {
   log "Waiting for services to become healthy..."
-  local max=60
+  local max=90
   for i in $(seq 1 $max); do
-    local healthy
+    local healthy=0
     healthy=$(docker compose ps --status healthy 2>/dev/null | wc -l)
-    local total
-    total=$(docker compose ps 2>/dev/null | wc -l)
-    printf "\r  Healthy: %d/%d services" "$healthy" "$((total - 1))"
-    if [ "$healthy" -ge "$((total - 2))" ]; then
-      echo ""
-      log "All services are up!"
+    printf "\r  Healthy: %d/%d  (attempt %d/%d)" "$healthy" "$TARGET_SERVICES" "$i" "$max"
+    if [ "$healthy" -ge "$TARGET_SERVICES" ]; then
+      echo ""; log "All $TARGET_SERVICES services are healthy!"
       return 0
     fi
     sleep 5
   done
   echo ""
-  warn "Some services may still be starting. Run 'docker compose ps' to check."
+  warn "Not all services reached healthy. Check: cd ~/bheda && docker compose ps"
 }
+
+# ─── Summary ────────────────────────────────────────────────────
 
 print_summary() {
-  echo ""
-  echo "╔══════════════════════════════════════════════════════╗"
-  echo "║          Bheda is ready!                             ║"
-  echo "╠══════════════════════════════════════════════════════╣"
-  echo "║  Frontend:  http://localhost:3000                    ║"
-  echo "║  API Docs:  http://localhost:8000/docs               ║"
-  echo "║  Admin:     http://localhost:3000/admin              ║"
-  echo "║  Username:  admin                                    ║"
-  echo "║  Password:  admin                                    ║"
-  echo "╠══════════════════════════════════════════════════════╣"
-  echo "║  Directory: $INSTALL_DIR              ║"
-  echo "║  Reset:     cd bheda && ./scripts/reset.sh          ║"
-  echo "║  Logs:      cd bheda && docker compose logs -f      ║"
-  echo "╚══════════════════════════════════════════════════════╝"
-  echo ""
+  cat << EOF
+
+╔═══════════════════════════════════════════════════════╗
+║            Bheda is ready!                            ║
+╠═══════════════════════════════════════════════════════╣
+║  Frontend:  http://localhost:3000                     ║
+║  API Docs:  http://localhost:8000/docs                ║
+║  Admin:     http://localhost:3000/admin               ║
+║  Username:  admin  |  Password: admin                 ║
+╠═══════════════════════════════════════════════════════╣
+║  View logs: docker compose -f ~/bheda/docker-compose.yml logs -f
+║  Reset:     ./bheda/scripts/reset.sh                  ║
+╚═══════════════════════════════════════════════════════╝
+EOF
 }
 
+# ─── Main ───────────────────────────────────────────────────────
+
 main() {
-  echo ""
-  echo "╔══════════════════════════════════════════════════════╗"
-  echo "║     Bheda — Automated Setup                         ║"
-  echo "╚══════════════════════════════════════════════════════╝"
-  echo ""
+  cat << EOF
+
+╔═══════════════════════════════════════════════════════╗
+║    Bheda Vulnerability Lab — Automated Setup         ║
+║    Platform: ${RAW_OS} ${ARCH}
+╚═══════════════════════════════════════════════════════╝
+EOF
 
   install_docker
-  ensure_docker_running
   clone_repo
   setup_env
   generate_certs

@@ -55,7 +55,8 @@ cleanup() {
   info "Partial state cleaned. Re-run the script to continue."
   exit 1
 }
-trap cleanup SIGINT SIGTERM
+trap cleanup INT TERM
+HAS_TTY=false; [ -t 0 ] && HAS_TTY=true
 
 # ─── Package Manager ────────────────────────────────────────────
 
@@ -112,20 +113,25 @@ install_docker_macos() {
   if ! command -v brew &>/dev/null; then
     info "Installing Homebrew..."
     /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    local brew_path
     if [ "$ARCH" = "arm64" ]; then
-      echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> "$HOME/.zprofile"
-      eval "$(/opt/homebrew/bin/brew shellenv)"
+      brew_path="/opt/homebrew/bin/brew"
+    else
+      brew_path="/usr/local/bin/brew"
     fi
+    echo 'eval "$('"$brew_path"' shellenv)"' >> "$HOME/.zprofile"
+    echo 'eval "$('"$brew_path"' shellenv)"' >> "$HOME/.bash_profile"
+    eval "$("$brew_path" shellenv)"
   fi
 
   if ! command -v docker &>/dev/null; then
     brew install --cask docker
-    warn "Opening Docker Desktop installer. Complete the wizard, then return here."
-    if [ -n "${DISPLAY:-}" ] || [ -n "${CI:-}" ]; then
+    warn "Opening Docker Desktop installer. Complete the wizard, then come back here."
+    if [ -n "${DISPLAY:-}" ] && [ -z "${CI:-}" ]; then
       open /Applications/Docker.app 2>/dev/null || true
     fi
     info "Waiting for Docker to start (up to 90s)..."
-    for i in $(seq 1 45); do
+    for ((i=0; i<45; i++)); do
       if docker info &>/dev/null 2>&1; then log "Docker is running."; return 0; fi
       sleep 2
     done
@@ -137,14 +143,17 @@ install_docker_macos() {
 
 install_docker_windows_gitbash() {
   warn "Docker Desktop is required."
-  info "Opening download page..."
-  if command -v start &>/dev/null; then
-    start https://www.docker.com/products/docker-desktop
+  info "Download: https://www.docker.com/products/docker-desktop"
+  info "Download: https://git-scm.com/download/win"
+  cmd.exe /c start "" "https://www.docker.com/products/docker-desktop" 2>/dev/null || true
+  if [ "$HAS_TTY" = true ]; then
+    echo ""; read -rp "Press Enter after installing Docker Desktop and Git for Windows..."
+  else
+    warn "Run this script from Git Bash (not piped) after installing Docker Desktop."
+    exit 0
   fi
-  echo ""
-  read -rp "Press Enter after installing Docker Desktop and Git for Windows..."
   if ! command -v docker &>/dev/null; then
-    fail "Docker not found. Add it to PATH and re-run."
+    fail "Docker not found. Ensure 'Docker Desktop' is running and in PATH, then re-run."
   fi
 }
 
@@ -173,11 +182,10 @@ install_docker() {
     warn "Docker is installed but not running. Starting..."
     if [ "$IS_WSL" = true ]; then
       sudo dockerd &>/dev/null &
-      WAIT_PID=$!
     elif [ "$IS_MAC" = true ]; then
       open /Applications/Docker.app 2>/dev/null || true
     fi
-    for i in $(seq 1 30); do
+    for ((i=0; i<30; i++)); do
       if docker info &>/dev/null 2>&1; then log "Docker started."; return 0; fi
       sleep 3
     done
@@ -258,15 +266,17 @@ start_services() {
 wait_for_health() {
   log "Waiting for services to become healthy..."
   local max=90
-  for i in $(seq 1 $max); do
-    local healthy=0
-    healthy=$(docker compose ps --status healthy 2>/dev/null | wc -l)
+  local i=1
+  while [ $i -le $max ]; do
+    local healthy
+    healthy=$(docker compose ps 2>/dev/null | grep -c healthy)
     printf "\r  Healthy: %d/%d  (attempt %d/%d)" "$healthy" "$TARGET_SERVICES" "$i" "$max"
     if [ "$healthy" -ge "$TARGET_SERVICES" ]; then
       echo ""; log "All $TARGET_SERVICES services are healthy!"
       return 0
     fi
     sleep 5
+    i=$((i + 1))
   done
   echo ""
   warn "Not all services reached healthy. Check: cd ~/bheda && docker compose ps"
@@ -275,20 +285,18 @@ wait_for_health() {
 # ─── Summary ────────────────────────────────────────────────────
 
 print_summary() {
-  cat << EOF
-
-╔═══════════════════════════════════════════════════════╗
-║            Bheda is ready!                            ║
-╠═══════════════════════════════════════════════════════╣
-║  Frontend:  http://localhost:3000                     ║
-║  API Docs:  http://localhost:8000/docs                ║
-║  Admin:     http://localhost:3000/admin               ║
-║  Username:  admin  |  Password: admin                 ║
-╠═══════════════════════════════════════════════════════╣
-║  View logs: docker compose -f ~/bheda/docker-compose.yml logs -f
-║  Reset:     ./bheda/scripts/reset.sh                  ║
-╚═══════════════════════════════════════════════════════╝
-EOF
+  echo ""
+  echo "╔═══════════════════════════════════════════════════════╗"
+  echo "║            Bheda is ready!                            ║"
+  echo "╠═══════════════════════════════════════════════════════╣"
+  echo "║  Frontend:  http://localhost:3000                     ║"
+  echo "║  API Docs:  http://localhost:8000/docs                ║"
+  echo "║  Admin:     http://localhost:3000/admin               ║"
+  echo "║  Username:  admin  |  Password: admin                 ║"
+  echo "╠═══════════════════════════════════════════════════════╣"
+  echo "║  Logs:  docker compose -f ~/bheda/docker-compose.yml logs -f  ║"
+  echo "║  Reset: ./bheda/scripts/reset.sh                      ║"
+  echo "╚═══════════════════════════════════════════════════════╝"
 }
 
 # ─── Main ───────────────────────────────────────────────────────
@@ -303,6 +311,25 @@ main() {
 EOF
 
   install_docker
+
+  if ! command -v git &>/dev/null; then
+    info "Installing Git..."
+    if [ "$IS_MAC" = true ]; then
+      brew install git
+    elif [ "$IS_LINUX" = true ]; then
+      local pm; pm=$(detect_pm)
+      case "$pm" in
+        apt) sudo apt install -y git ;;
+        dnf|yum) sudo dnf install -y git ;;
+        pacman) sudo pacman -Syu --noconfirm git ;;
+        *) fail "Install Git manually and re-run." ;;
+      esac
+    elif [ "$IS_GITBASH" = true ]; then
+      if ! command -v git &>/dev/null; then
+        fail "Install Git for Windows from https://git-scm.com/download/win and re-run."
+      fi
+    fi
+  fi
   clone_repo
   setup_env
   generate_certs

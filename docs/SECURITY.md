@@ -69,28 +69,9 @@ We kindly ask that you:
 
 ---
 
-## Bug Bounty Program
+## Hall of Fame
 
-### Program Scope
-We offer a **bug bounty** for vulnerabilities discovered in the Bheda platform itself (not the challenge labs).
-
-### Rewards
-
-| Severity | Reward |
-|----------|--------|
-| Critical (RCE, auth bypass, data breach) | $500 |
-| High (privilege escalation, SSRF to cloud metadata) | $250 |
-| Medium (XSS in admin panel, CSRF on sensitive actions) | $100 |
-| Low (info disclosure, missing headers on platform) | $50 |
-
-### Payment
-- Rewards are paid via GitHub Sponsors or PayPal
-- Paid within 30 days of validated report
-- Duplicate reports are not rewarded
-- Only the first reporter of a unique vulnerability is eligible
-
-### Hall of Fame
-Valid reporters will be credited in our Security Hall of Fame (opt-out available).
+We maintain a **Hall of Fame** to recognize researchers who report valid security issues in the Bheda platform itself (not the challenge labs). This is a free, recognition-based program — no monetary rewards are offered.
 
 ---
 

@@ -130,4 +130,4 @@ The WAF contains 5 intentional bypasses (challenge waf-1 through waf-5). These a
 ## Contact
 
 - **Security:** 09prabirmaity@gmail.com
-- **Maintainer:** @Prabir009000 on GitHub
+- **Maintainer:** @atirathi on GitHub

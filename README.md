@@ -2,12 +2,18 @@
 
 ## Quick Start
 
+### One-Click (all platforms)
+```bash
+curl -fsSL https://raw.githubusercontent.com/atirathi/bheda/master/setup.sh | bash
+```
+
+### Manual
 ```bash
 cp .env.example .env
 docker compose up -d
-# → Frontend: http://bheda.local:3000
-# → API:      http://bheda.local:8000
-# → TLS Lab:  tls.lab:44301-44316
+# → Frontend: http://localhost:3000
+# → API:      http://localhost:8000
+# → TLS Lab:  https://localhost:44301-44316
 ```
 
 ## Modes
@@ -22,9 +28,9 @@ docker compose up -d
 ## Admin Access
 
 ```
-URL:    http://bheda.local:3000/admin
-Email:  admin@bheda.lab
-Pass:   admin
+URL:      http://localhost:3000/admin
+Username:  admin
+Password:  admin
 ```
 
 ## Architecture

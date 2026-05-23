@@ -318,5 +318,4 @@ unlock_condition: "Solve 80% of Advanced challenges"
 ## Getting Help
 
 - Open a GitHub Discussion for questions
-- Join the Discord (link in README)
 - Tag maintainers in issues: @atirathi

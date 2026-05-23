@@ -33,9 +33,7 @@ If you discover a security issue **outside** of the intentional challenge scope,
 
 ### How to Report
 
-**Email:** security@bheda.dev
-
-**PGP Key:** Available at `https://bheda.dev/.well-known/pgp-key.txt`
+**Email:** 09prabirmaity@gmail.com
 
 ### What to Include
 - Description of the vulnerability
@@ -150,6 +148,5 @@ The WAF contains 5 intentional bypasses (challenge waf-1 through waf-5). These a
 
 ## Contact
 
-- **Security:** security@bheda.dev
-- **Maintainer:** @atirathi on GitHub
-- **Discord:** https://discord.gg/bheda (channel: #security)
+- **Security:** 09prabirmaity@gmail.com
+- **Maintainer:** @Prabir009000 on GitHub

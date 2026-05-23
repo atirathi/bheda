@@ -1,0 +1,16 @@
+id: zd-6
+title: "Use-After-Free in Cache Layer"
+category: zero-day
+difficulty: expert
+cvss: 9.9
+owasp: A06:2021 – Vulnerable Components
+endpoint: /zero-day/zd-6
+description: "A use-after-free in the response cache layer when concurrent invalidation occurs. No known CVE. This is a custom vulnerability in Bheda Labs internal component."
+hints:
+  - "Analyze the source code of the custom component for unsafe memory operations."
+  - "Craft a specific input that triggers the state corruption."
+  - "Exploit requires chaining with an information leak to bypass ASLR."
+flag: "BHEDA{zero_day_6}"
+flag_location: "Memory dump or filesystem after exploitation"
+unlock_condition: "Solve 80% of Advanced challenges"
+solution_summary: "Reverse engineer the custom binary to find the buffer overflow offset, craft ROP chain to execute read_flag() function."

@@ -1,0 +1,168 @@
+import Redis from "ioredis";
+import axios from "axios";
+import { createHash } from "crypto";
+
+const REDIS_URL = process.env.REDIS_URL || "redis://localhost:6379";
+const BACKEND_URL = process.env.BACKEND_URL || "http://backend:8000";
+const API_KEY = process.env.API_KEY || "bheda-internal-api-key-2026";
+
+const redis = new Redis(REDIS_URL);
+
+const RATE_LIMIT_WINDOW = 60;
+const RATE_LIMIT_MAX = 10;
+
+// ─── Duplicate IP Detection ───
+export async function checkDuplicateIP(teamId: string, ipAddress: string): Promise<{ duplicate: boolean; other_teams: string[] }> {
+  const ipKey = `anti-cheat:ip:${ipAddress}`;
+  const existingTeam = await redis.get(ipKey);
+
+  if (existingTeam && existingTeam !== teamId) {
+    // This IP is shared with another team — possible collusion
+    const otherTeams = await redis.smembers(`anti-cheat:ip-teams:${ipAddress}`);
+    return { duplicate: true, other_teams: otherTeams.filter((t) => t !== teamId) };
+  }
+
+  // Register this IP for the team
+  await redis.setex(ipKey, 3600, teamId);
+  await redis.sadd(`anti-cheat:ip-teams:${ipAddress}`, teamId);
+  await redis.expire(`anti-cheat:ip-teams:${ipAddress}`, 3600);
+
+  return { duplicate: false, other_teams: [] };
+}
+
+// ─── Rate-limit Flag Submissions ───
+export async function checkRateLimit(teamId: string, challengeId: string): Promise<{ allowed: boolean; retry_after: number; attempts_in_window: number }> {
+  const rateKey = `anti-cheat:ratelimit:${teamId}:${challengeId}`;
+  const now = Date.now();
+  const windowStart = now - RATE_LIMIT_WINDOW * 1000;
+
+  await redis.zremrangebyscore(rateKey, 0, windowStart);
+  const attempts = await redis.zcard(rateKey);
+
+  if (attempts >= RATE_LIMIT_MAX) {
+    const oldest = await redis.zrange(rateKey, 0, 0, "WITHSCORES");
+    const oldestTime = oldest.length > 1 ? parseInt(oldest[1], 10) : now;
+    const retryAfter = Math.ceil((oldestTime + RATE_LIMIT_WINDOW * 1000 - now) / 1000);
+
+    return { allowed: false, retry_after: Math.max(retryAfter, 1), attempts_in_window: attempts };
+  }
+
+  await redis.zadd(rateKey, now, `${now}:${Math.random().toString(36).slice(2)}`);
+  await redis.expire(rateKey, RATE_LIMIT_WINDOW);
+
+  return { allowed: true, retry_after: 0, attempts_in_window: attempts };
+}
+
+// ─── Flag Uniqueness Validation ───
+export async function validateFlagUniqueness(flag: string): Promise<{ valid: boolean; reason?: string }> {
+  // Flags should match expected pattern
+  const flagPattern = /^flag\{[a-z0-9_-]+\}$/i;
+  if (!flagPattern.test(flag)) {
+    return { valid: false, reason: "Flag must match pattern: flag{...}" };
+  }
+
+  // Check for common brute-force patterns
+  const normalized = flag.toLowerCase();
+
+  // Reject common testing patterns
+  const testingPatterns = ["test", "admin", "password", "1234", "qwerty", "flag{flag}", "flag{test}"];
+  for (const pattern of testingPatterns) {
+    if (normalized.includes(pattern)) {
+      return { valid: false, reason: "Flag appears to be a test value" };
+    }
+  }
+
+  // Check hash uniqueness
+  const flagHash = createHash("sha256").update(flag).digest("hex");
+  const existingFlag = await redis.get(`anti-cheat:flag-hash:${flagHash}`);
+
+  if (existingFlag) {
+    return { valid: false, reason: "This flag has already been used in another challenge" };
+  }
+
+  // Register this flag hash
+  await redis.setex(`anti-cheat:flag-hash:${flagHash}`, 86400, "used");
+
+  return { valid: true };
+}
+
+// ─── Comprehensive Submission Check ───
+export async function validateSubmission(
+  params: {
+    teamId: string;
+    userId: string;
+    flag: string;
+    challengeId: string;
+    eventId?: string;
+    ipAddress: string;
+    userAgent?: string;
+  }
+): Promise<{
+  allowed: boolean;
+  score: number;
+  flags: {
+    duplicate_ip: boolean;
+    rate_limited: boolean;
+    invalid_flag: boolean;
+    already_solved: boolean;
+  };
+  detail?: string;
+}> {
+  const { teamId, flag, challengeId, eventId, ipAddress } = params;
+  const flags = { duplicate_ip: false, rate_limited: false, invalid_flag: false, already_solved: false };
+  let score = 0;
+
+  // 1. Check if already solved this challenge
+  if (eventId) {
+    const solvedKey = `ctf:scores:${eventId}:${teamId}`;
+    const alreadySolved = await redis.hexists(solvedKey, challengeId);
+    if (alreadySolved) {
+      return { allowed: false, score: 0, flags, detail: "Challenge already solved by this team" };
+    }
+  }
+
+  // 2. Validate flag format
+  const flagCheck = await validateFlagUniqueness(flag);
+  if (!flagCheck.valid) {
+    flags.invalid_flag = true;
+    return { allowed: false, score: 0, flags, detail: flagCheck.reason };
+  }
+
+  // 3. Rate limit check
+  const rateCheck = await checkRateLimit(teamId, challengeId);
+  if (!rateCheck.allowed) {
+    flags.rate_limited = true;
+    return { allowed: false, score: 0, flags, detail: `Rate limited. Retry in ${rateCheck.retry_after}s` };
+  }
+
+  // 4. Duplicate IP check (across teams)
+  const ipCheck = await checkDuplicateIP(teamId, ipAddress);
+  if (ipCheck.duplicate) {
+    flags.duplicate_ip = true;
+    // Log the violation but don't block — flag for review
+    await redis.lpush(
+      "anti-cheat:alerts",
+      JSON.stringify({
+        type: "duplicate_ip",
+        team_id: teamId,
+        ip: ipAddress,
+        other_teams: ipCheck.other_teams,
+        challenge_id: challengeId,
+        timestamp: new Date().toISOString(),
+      })
+    );
+  }
+
+  return { allowed: true, score: 0, flags };
+}
+
+// ─── Get anti-cheat alerts ───
+export async function getAlerts(limit: number = 50): Promise<any[]> {
+  const alerts = await redis.lrange("anti-cheat:alerts", 0, limit - 1);
+  return alerts.map((a) => JSON.parse(a));
+}
+
+// ─── Clear alerts ───
+export async function clearAlerts(): Promise<void> {
+  await redis.del("anti-cheat:alerts");
+}

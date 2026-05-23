@@ -1,0 +1,115 @@
+version: '3.8'
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-healthcheck-defaults: &healthcheck-defaults
+  interval: 10s
+  timeout: 5s
+  retries: 5
+  start_period: 15s
+
+services:
+  # ─── Override Backend for CTF Mode ───
+  backend:
+    environment:
+      MODE: ctf
+      RABBIT_HOLES_ENABLED: "true"
+      SCHEDULER_ENABLED: "true"
+      PROFILES_ENABLED: "true"
+      CTF_MAX_TEAM_SIZE: "5"
+      CTF_DEFAULT_EVENT_DURATION_HOURS: "48"
+      ANTI_CHEAT_ENABLED: "true"
+      PER_TEAM_INSTANCE_ENABLED: "true"
+      CORS_ORIGINS: "*"
+
+  # ─── Override CTF Engine for Competition Mode ───
+  ctf-engine:
+    environment:
+      MODE: ctf
+      ANTI_CHEAT_ENABLED: "true"
+      PER_TEAM_INSTANCES: "true"
+      SCORING_MODE: "dynamic"
+      DECAY_FUNCTION: "linear"
+      MIN_POINTS: 50
+      MAX_POINTS: 500
+      INSTANCE_TTL_MINUTES: "120"
+      ORCHESTRATOR_POLL_INTERVAL: "5"
+    ports:
+      - "3004:3004"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ctf_instances:/opt/ctf/instances
+    networks:
+      - bheda-net
+      - ctf-team-net
+
+  # ─── Per-Team Instance Network ───
+  team-proxy:
+    image: nginx:1.24-alpine
+    container_name: bheda-team-proxy
+    depends_on:
+      ctf-engine: { condition: service_started }
+    ports:
+      - "8080-8099:80"
+    volumes:
+      - ./ctf-engine/team-proxy.conf:/etc/nginx/conf.d/default.conf:ro
+    logging: *default-logging
+    networks:
+      - bheda-net
+      - ctf-team-net
+    restart: unless-stopped
+
+  # ─── Anti-Cheat Service ───
+  anti-cheat:
+    image: redis:7-alpine
+    container_name: bheda-anti-cheat
+    command: redis-server --requirepass bheda_anticheat_2026 --appendonly yes
+    volumes:
+      - anticheat_data:/data
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "redis-cli", "-a", "bheda_anticheat_2026", "ping"]
+    logging: *default-logging
+    networks:
+      - bheda-net
+    restart: unless-stopped
+
+  # ─── Scoreboard Updater ───
+  scoreboard:
+    build: ./ctf-engine
+    container_name: bheda-scoreboard
+    entrypoint: ["node", "dist/scoreboard.js"]
+    depends_on:
+      redis: { condition: service_healthy }
+      backend: { condition: service_healthy }
+    environment:
+      REDIS_URL: redis://:bheda_redis_2026@redis:6379/0
+      BACKEND_URL: http://backend:8000
+      API_KEY: bheda-internal-api-key-2026
+      MODE: ctf
+      UPDATE_INTERVAL: "10"
+    logging: *default-logging
+    networks:
+      - bheda-net
+    restart: unless-stopped
+
+networks:
+  bheda-net:
+    external: true
+    name: bheda_net
+  ctf-team-net:
+    driver: bridge
+    name: ctf_team_net
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  ctf_instances:
+    name: bheda_ctf_instances
+  anticheat_data:
+    name: bheda_anticheat_data

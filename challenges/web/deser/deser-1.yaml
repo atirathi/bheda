@@ -1,0 +1,15 @@
+id: deser-1
+title: "Insecure Deserialization - Challenge 1"
+category: web
+difficulty: easy
+cvss: 7.5
+owasp: A08:2021 – Software and Data Integrity Failures
+endpoint: /api/deser/1
+description: "Insecure deserialization in the PHP unserialize() call in user preferences."
+hints:
+  - "Decode the serialized object to see its structure."
+  - "Craft a malicious serialized object that executes a command."
+  - "Use ysoserial or similar to generate a payload."
+flag: "BHEDA{deser_challenge_1}"
+flag_location: "Server filesystem after RCE"
+solution_summary: "Craft a malicious Pickle payload that executes 'cat /flag.txt' and send it as the session cookie."

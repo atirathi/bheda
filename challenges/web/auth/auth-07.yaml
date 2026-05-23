@@ -1,0 +1,15 @@
+id: auth-07
+title: "Authentication Bypass - Challenge 07"
+category: web
+difficulty: medium
+cvss: 8.2
+owasp: A07:2021 – Identification and Authentication Failures
+endpoint: /api/auth/07
+description: "Authentication flaw: session fixation allows session hijacking."
+hints:
+  - "Check for default credentials like admin:admin."
+  - "The session ID does not change after login (session fixation)."
+  - "The password reset token is predictable (timestamp-based)."
+flag: "BHEDA{auth_bypass_07}"
+flag_location: "Dashboard or profile page after authentication bypass"
+solution_summary: "Use default credentials admin:admin to log in and access the admin dashboard containing the flag."

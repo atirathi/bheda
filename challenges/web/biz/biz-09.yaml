@@ -1,0 +1,15 @@
+id: biz-09
+title: "Business Logic Flaw - Challenge 09"
+category: web
+difficulty: hard
+cvss: 8.5
+owasp: A01:2021 – Broken Access Control
+endpoint: /api/biz/09
+description: "Business logic vulnerability: negative numbers accepted in order total leading to refund abuse."
+hints:
+  - "Try submitting negative quantities or prices."
+  - "Intercept the request and modify the price parameter."
+  - "The same coupon code can be applied multiple times."
+flag: "BHEDA{biz_logic_09}"
+flag_location: "Order confirmation page or account balance"
+solution_summary: "Set item price to -100 during checkout. The system processes a negative charge, increasing your balance. Purchase the premium item with the inflated balance to get the flag."

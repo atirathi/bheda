@@ -1,0 +1,15 @@
+id: wasm-2
+title: "WebAssembly Security - Challenge 2"
+category: web
+difficulty: easy
+cvss: 6.5
+owasp: A02:2021 – Cryptographic Failures
+endpoint: /wasm/2
+description: "WASM security issue: client-side validation logic is compiled in WASM and can be reverse-engineered."
+hints:
+  - "Download the .wasm file and use wasm2wat to decompile it."
+  - "Look for hardcoded strings and comparison functions."
+  - "The flag check function can be reversed to reveal the correct input."
+flag: "BHEDA{wasm_challenge_2}"
+flag_location: "WASM binary strings or function output"
+solution_summary: "Use wasm2wat to decompile main.wasm, find the check_password function, reverse the XOR obfuscation to reveal the flag."

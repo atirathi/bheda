@@ -1,0 +1,15 @@
+id: tls-11
+title: "TLS tls1.0"
+category: tls
+difficulty: easy
+cvss: 5.5
+owasp: A02:2021 – Cryptographic Failures
+endpoint: https://localhost:44311
+description: "TLS 1.0 only, vulnerable to BEAST attack."
+hints:
+  - "Use openssl s_client to inspect the certificate and cipher negotiation."
+  - "Force specific protocols or ciphers with -ssl3, -tls1, or -cipher flags."
+  - "Check for exposed files or debug endpoints on the server."
+flag: "BHEDA{tls_tls1.0}"
+flag_location: "HTTPS response body on port 44311"
+solution_summary: "Connect with appropriate openssl flags. For tls1.0: openssl s_client -connect localhost:${PORT}"

@@ -1,0 +1,191 @@
+version: '3.8'
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  tls-01-self-signed:
+    image: nginx:1.24-alpine
+    container_name: bheda-tls-01
+    ports: ["44301:44301"]
+    volumes:
+      - ./tls-lab/configs/01-self-signed.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./tls-lab/certs/self-signed:/certs/self-signed:ro
+    logging: *default-logging
+    networks: [bheda-net]
+    restart: unless-stopped
+
+  tls-02-expired:
+    image: nginx:1.24-alpine
+    container_name: bheda-tls-02
+    ports: ["44302:44302"]
+    volumes:
+      - ./tls-lab/configs/02-expired.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./tls-lab/certs/expired:/certs/expired:ro
+    logging: *default-logging
+    networks: [bheda-net]
+    restart: unless-stopped
+
+  tls-03-wildcard:
+    image: nginx:1.24-alpine
+    container_name: bheda-tls-03
+    ports: ["44303:44303"]
+    volumes:
+      - ./tls-lab/configs/03-wildcard.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./tls-lab/certs/wildcard:/certs/wildcard:ro
+    logging: *default-logging
+    networks: [bheda-net]
+    restart: unless-stopped
+
+  tls-04-cn-san-bypass:
+    image: nginx:1.24-alpine
+    container_name: bheda-tls-04
+    ports: ["44304:44304"]
+    volumes:
+      - ./tls-lab/configs/04-cn-san-bypass.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./tls-lab/certs/ca:/certs/ca:ro
+    logging: *default-logging
+    networks: [bheda-net]
+    restart: unless-stopped
+
+  tls-05-crl-disabled:
+    image: nginx:1.24-alpine
+    container_name: bheda-tls-05
+    ports: ["44305:44305"]
+    volumes:
+      - ./tls-lab/configs/05-crl-disabled.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./tls-lab/certs/ca:/certs/ca:ro
+      - ./tls-lab/certs/revoked:/certs/revoked:ro
+    logging: *default-logging
+    networks: [bheda-net]
+    restart: unless-stopped
+
+  tls-06-rsa512:
+    image: nginx:1.24-alpine
+    container_name: bheda-tls-06
+    ports: ["44306:44306"]
+    volumes:
+      - ./tls-lab/configs/06-rsa512.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./tls-lab/certs/rsa512:/certs/rsa512:ro
+    logging: *default-logging
+    networks: [bheda-net]
+    restart: unless-stopped
+
+  tls-07-sslv3:
+    image: nginx:1.24-alpine-slim
+    container_name: bheda-tls-07
+    ports: ["44307:44307"]
+    volumes:
+      - ./tls-lab/configs/07-sslv3.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./tls-lab/certs/self-signed:/certs/self-signed:ro
+    logging: *default-logging
+    networks: [bheda-net]
+    restart: unless-stopped
+
+  tls-08-rc4:
+    image: nginx:1.24-alpine
+    container_name: bheda-tls-08
+    ports: ["44308:44308"]
+    volumes:
+      - ./tls-lab/configs/08-rc4.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./tls-lab/certs/self-signed:/certs/self-signed:ro
+    logging: *default-logging
+    networks: [bheda-net]
+    restart: unless-stopped
+
+  tls-09-null-cipher:
+    image: nginx:1.24-alpine
+    container_name: bheda-tls-09
+    ports: ["44309:44309"]
+    volumes:
+      - ./tls-lab/configs/09-null-cipher.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./tls-lab/certs/self-signed:/certs/self-signed:ro
+    logging: *default-logging
+    networks: [bheda-net]
+    restart: unless-stopped
+
+  tls-10-tls1-0-beast:
+    image: nginx:1.24-alpine
+    container_name: bheda-tls-10
+    ports: ["44310:44310"]
+    volumes:
+      - ./tls-lab/configs/10-tls1.0-beast.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./tls-lab/certs/self-signed:/certs/self-signed:ro
+    logging: *default-logging
+    networks: [bheda-net]
+    restart: unless-stopped
+
+  tls-11-export-dh:
+    image: nginx:1.24-alpine
+    container_name: bheda-tls-11
+    ports: ["44311:44311"]
+    volumes:
+      - ./tls-lab/configs/11-export-dh.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./tls-lab/certs/self-signed:/certs/self-signed:ro
+    logging: *default-logging
+    networks: [bheda-net]
+    restart: unless-stopped
+
+  tls-12-compression:
+    image: nginx:1.24-alpine
+    container_name: bheda-tls-12
+    ports: ["44312:44312"]
+    volumes:
+      - ./tls-lab/configs/12-compression.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./tls-lab/certs/self-signed:/certs/self-signed:ro
+    logging: *default-logging
+    networks: [bheda-net]
+    restart: unless-stopped
+
+  tls-13-heartbleed:
+    image: nginx:1.24-alpine
+    container_name: bheda-tls-13
+    ports: ["44313:44313"]
+    volumes:
+      - ./tls-lab/configs/13-heartbleed.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./tls-lab/certs/self-signed:/certs/self-signed:ro
+    logging: *default-logging
+    networks: [bheda-net]
+    restart: unless-stopped
+
+  tls-14-renegotiation:
+    image: nginx:1.24-alpine
+    container_name: bheda-tls-14
+    ports: ["44314:44314"]
+    volumes:
+      - ./tls-lab/configs/14-renegotiation.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./tls-lab/certs/self-signed:/certs/self-signed:ro
+    logging: *default-logging
+    networks: [bheda-net]
+    restart: unless-stopped
+
+  tls-15-session-ticket:
+    image: nginx:1.24-alpine
+    container_name: bheda-tls-15
+    ports: ["44315:44315"]
+    volumes:
+      - ./tls-lab/configs/15-session-ticket.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./tls-lab/certs/session:/certs/session:ro
+      - ./tls-lab/certs/self-signed:/certs/self-signed:ro
+    logging: *default-logging
+    networks: [bheda-net]
+    restart: unless-stopped
+
+  tls-16-breach:
+    image: nginx:1.24-alpine
+    container_name: bheda-tls-16
+    ports: ["44316:44316"]
+    volumes:
+      - ./tls-lab/configs/16-breach.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./tls-lab/certs/self-signed:/certs/self-signed:ro
+    logging: *default-logging
+    networks: [bheda-net]
+    restart: unless-stopped
+
+networks:
+  bheda-net:
+    external: true
+    name: bheda_net

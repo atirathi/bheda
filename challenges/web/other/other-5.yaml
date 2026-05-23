@@ -1,0 +1,15 @@
+id: other-5
+title: "Miscellaneous Web - Challenge 5"
+category: web
+difficulty: hard
+cvss: 7.8
+owasp: A05:2021 – Security Misconfiguration
+endpoint: /api/other/5
+description: "Miscellaneous vulnerability: open redirect leads to phishing attack surface."
+hints:
+  - "Duplicate a parameter to override its value."
+  - "Check the Access-Control-Allow-Origin header in responses."
+  - "The redirect parameter accepts any URL."
+flag: "BHEDA{misc_challenge_5}"
+flag_location: "Response header or redirect destination"
+solution_summary: "Add origin: https://evil.com to the request. CORS reflects origin header in Access-Control-Allow-Origin, allowing cross-origin fetch of sensitive data."

@@ -1,0 +1,15 @@
+id: jwt-03
+title: "JWT Security - Challenge 03"
+category: web
+difficulty: easy
+cvss: 6.5
+owasp: A02:2021 – Cryptographic Failures
+endpoint: /api/jwt/03
+description: "JWT vulnerability: RS256 to HS256 key confusion"
+hints:
+  - "Decode the JWT and examine its header and payload."
+  - "Try modifying the algorithm to 'none'."
+  - "The secret key is weak and can be brute-forced."
+flag: "BHEDA{jwt_challenge_03}"
+flag_location: "JWT payload or admin-only endpoint"
+solution_summary: "Decode JWT, change alg to 'none', set role to admin, and re-encode to generate a forged token."

@@ -1,0 +1,15 @@
+id: api-01
+title: "API Security - Challenge 01"
+category: web
+difficulty: easy
+cvss: 6.5
+owasp: A01:2021 – Broken Access Control
+endpoint: /api/v01
+description: "API security issue: API returns excessive data in responses (mass assignment)."
+hints:
+  - "Examine the API response for sensitive fields."
+  - "Try adding ?fields[]=admin or similar mass assignment parameters."
+  - "Use GraphQL introspection query to discover hidden mutations."
+flag: "BHEDA{api_challenge_01}"
+flag_location: "API response or hidden GraphQL mutation"
+solution_summary: "Query GraphQL __schema { types { name fields { name } } } to discover the hidden 'flag' mutation and execute it."

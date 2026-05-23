@@ -1,0 +1,15 @@
+id: other-3
+title: "Miscellaneous Web - Challenge 3"
+category: web
+difficulty: medium
+cvss: 6.5
+owasp: A05:2021 – Security Misconfiguration
+endpoint: /api/other/3
+description: "Miscellaneous vulnerability: CORS misconfiguration allows cross-origin data theft."
+hints:
+  - "Duplicate a parameter to override its value."
+  - "Check the Access-Control-Allow-Origin header in responses."
+  - "The redirect parameter accepts any URL."
+flag: "BHEDA{misc_challenge_3}"
+flag_location: "Response header or redirect destination"
+solution_summary: "Add origin: https://evil.com to the request. CORS reflects origin header in Access-Control-Allow-Origin, allowing cross-origin fetch of sensitive data."

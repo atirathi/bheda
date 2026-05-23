@@ -1,0 +1,15 @@
+id: auth-11
+title: "Authentication Bypass - Challenge 11"
+category: web
+difficulty: hard
+cvss: 9.4
+owasp: A07:2021 – Identification and Authentication Failures
+endpoint: /api/auth/11
+description: "Authentication flaw: password reset logic is flawed."
+hints:
+  - "Check for default credentials like admin:admin."
+  - "The session ID does not change after login (session fixation)."
+  - "The password reset token is predictable (timestamp-based)."
+flag: "BHEDA{auth_bypass_11}"
+flag_location: "Dashboard or profile page after authentication bypass"
+solution_summary: "Use default credentials admin:admin to log in and access the admin dashboard containing the flag."

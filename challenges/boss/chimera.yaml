@@ -1,0 +1,33 @@
+id: boss-chimera
+title: "CHIMERA — Hybrid Beast"
+category: boss
+difficulty: boss
+cvss: 9.4
+owasp: A08:2021 – Software and Data Integrity Failures
+endpoint: /boss/chimera
+description: "A 4-step boss chain combining deserialization, XXE, SSRF, and a polyglot payload that triggers all three vulnerabilities from a single file upload."
+hints:
+  - "Step 1: Upload a GIF that is also a valid XML document (GIF + XXE polyglot)."
+  - "Step 2: XXE triggers SSRF to internal service."
+  - "Step 3: SSRF response triggers PHP deserialization."
+  - "Step 4: Deserialization gadget chain achieves RCE."
+flag: "BHEDA{boss_chimera_complete}"
+flag_location: "Server filesystem after RCE"
+solution_summary: "Craft GIF+XML polyglot -> XXE -> SSRF -> PHP deserialization gadget chain RCE -> read flag"
+steps:
+  - id: chimera-1
+    description: "Upload polyglot GIF/XML file"
+    endpoint: /boss/chimera/upload
+    solution: "GIF header + XXE payload in a single file"
+  - id: chimera-2
+    description: "XXE triggers SSRF to internal app"
+    endpoint: /boss/chimera/internal
+    solution: "XXE SYSTEM 'http://internal:8080/trigger?data=PHNlcmlhbGl6ZWQ...'"
+  - id: chimera-3
+    description: "SSRF response contains serialized PHP object"
+    endpoint: /boss/chimera/deserialize
+    solution: "Response body is unserialized by the app"
+  - id: chimera-4
+    description: "PHP deserialization gadget RCE"
+    endpoint: /boss/chimera/rce
+    solution: "Monolog/RCE gadget chain executes system('cat /flag.txt')"

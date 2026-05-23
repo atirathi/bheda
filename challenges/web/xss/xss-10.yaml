@@ -1,0 +1,15 @@
+id: xss-10
+title: "Cross-Site Scripting - Challenge 10"
+category: web
+difficulty: hard
+cvss: 8.7
+owasp: A03:2021 – Injection
+endpoint: /api/xss/10
+description: "XSS vulnerability in the comment form. Input is reflected into the page with incomplete HTML entity filtering."
+hints:
+  - "Inject a script tag to test for XSS."
+  - "The filter blocks <script> but allows other tags like <img> with onerror."
+  - "Use event handlers like onfocus or onmouseover to trigger JavaScript execution."
+flag: "BHEDA{xss_challenge_10}"
+flag_location: "Document cookie or localStorage after XSS execution"
+solution_summary: "Inject <img src=x onerror=alert(document.cookie)> to trigger XSS and steal the session cookie containing the flag."

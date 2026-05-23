@@ -1,0 +1,16 @@
+id: zd-7
+title: "Prototype Pollution in JSON Parser"
+category: zero-day
+difficulty: medium
+cvss: 8.2
+owasp: A06:2021 – Vulnerable Components
+endpoint: /zero-day/zd-7
+description: "A prototype pollution vulnerability in the custom JSON parser allows arbitrary property injection. No known CVE. This is a custom vulnerability in Bheda Labs internal component."
+hints:
+  - "Analyze the source code of the custom component for unsafe memory operations."
+  - "Craft a specific input that triggers the state corruption."
+  - "Exploit requires chaining with an information leak to bypass ASLR."
+flag: "BHEDA{zero_day_7}"
+flag_location: "Memory dump or filesystem after exploitation"
+unlock_condition: "Solve 80% of Advanced challenges"
+solution_summary: "Reverse engineer the custom binary to find the buffer overflow offset, craft ROP chain to execute read_flag() function."

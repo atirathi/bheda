@@ -1,0 +1,15 @@
+id: ssrf-10
+title: "Server-Side Request Forgery - Challenge 10"
+category: web
+difficulty: hard
+cvss: 9.3
+owasp: A10:2021 – Server-Side Request Forgery
+endpoint: /api/ssrf/10
+description: "SSRF vulnerability in the URL fetching proxy service. The application fetches user-supplied URLs without any validation."
+hints:
+  - "The server fetches URLs you provide. Try accessing internal services."
+  - "Use file:// protocol to read local files."
+  - "Bypass the blocklist using alternative representations like 127.1 or [::]."
+flag: "BHEDA{ssrf_challenge_10}"
+flag_location: "/etc/flag or internal metadata endpoint"
+solution_summary: "Submit a request to http://169.254.169.254/latest/meta-data/ to read cloud metadata and find the flag."

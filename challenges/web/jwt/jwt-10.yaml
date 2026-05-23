@@ -1,0 +1,15 @@
+id: jwt-10
+title: "JWT Security - Challenge 10"
+category: web
+difficulty: hard
+cvss: 9.0
+owasp: A02:2021 – Cryptographic Failures
+endpoint: /api/jwt/10
+description: "JWT vulnerability: key leakage in JWKS endpoint"
+hints:
+  - "Decode the JWT and examine its header and payload."
+  - "Try modifying the algorithm to 'none'."
+  - "The secret key is weak and can be brute-forced."
+flag: "BHEDA{jwt_challenge_10}"
+flag_location: "JWT payload or admin-only endpoint"
+solution_summary: "Decode JWT, change alg to 'none', set role to admin, and re-encode to generate a forged token."

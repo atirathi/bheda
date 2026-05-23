@@ -1,0 +1,15 @@
+id: sc-6
+title: "Supply Chain - Challenge 6"
+category: web
+difficulty: hard
+cvss: 9.6
+owasp: A08:2021 – Software and Data Integrity Failures
+endpoint: /api/supply-chain/6
+description: "Supply chain vulnerability: a malicious npm package in package.json executes postinstall script."
+hints:
+  - "Review the package.json or requirements.txt for suspicious packages."
+  - "Check known vulnerability databases for the dependency version."
+  - "Look for postinstall scripts in node_modules or pip packages."
+flag: "BHEDA{supply_chain_6}"
+flag_location: "Environment variable or /tmp/flag in the container"
+solution_summary: "Identify the typosquatted package (requesrs instead of requests) in requirements.txt. The malicious package reads /flag.txt and sends it to an attacker server."

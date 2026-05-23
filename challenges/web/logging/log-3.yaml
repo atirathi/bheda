@@ -1,0 +1,15 @@
+id: log-3
+title: "Logging & Monitoring - Challenge 3"
+category: web
+difficulty: medium
+cvss: 6.5
+owasp: A09:2021 – Security Logging and Monitoring Failures
+endpoint: /api/logging/3
+description: "Logging deficiency: failed login attempts are not logged allowing brute-force."
+hints:
+  - "Check world-readable files in /var/log/."
+  - "Search for log files containing application debug output."
+  - "Failed login attempts may reveal valid usernames in response timing."
+flag: "BHEDA{logging_failure_3}"
+flag_location: "Server log file"
+solution_summary: "Read /var/log/application.log to find plaintext passwords and session tokens that were inadvertently logged."

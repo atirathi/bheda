@@ -1,0 +1,15 @@
+id: api-16
+title: "API Security - Challenge 16"
+category: web
+difficulty: hard
+cvss: 9.2
+owasp: A01:2021 – Broken Access Control
+endpoint: /api/v16
+description: "API security issue: rate limiting is absent allowing brute-force."
+hints:
+  - "Examine the API response for sensitive fields."
+  - "Try adding ?fields[]=admin or similar mass assignment parameters."
+  - "Use GraphQL introspection query to discover hidden mutations."
+flag: "BHEDA{api_challenge_16}"
+flag_location: "API response or hidden GraphQL mutation"
+solution_summary: "Query GraphQL __schema { types { name fields { name } } } to discover the hidden 'flag' mutation and execute it."

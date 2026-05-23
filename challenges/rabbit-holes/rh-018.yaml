@@ -1,0 +1,8 @@
+id: rh-18
+title: "Rabbit Hole 18"
+type: honeypot_service
+service: ruby
+path: /debug/backup/config-18.bak
+description: "A honeypot_service rabbit hole. This looks like a promising attack vector but leads nowhere. The endpoint responds with fake credentials and decoy data to waste attacker time."
+response: {"error":"not_found","message":"This endpoint is monitored. Your IP has been logged."}
+detection_risk: "High — accessing this endpoint triggers an alert in the SIEM"

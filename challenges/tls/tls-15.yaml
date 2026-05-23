@@ -1,0 +1,15 @@
+id: tls-15
+title: "TLS renegotiation"
+category: tls
+difficulty: medium
+cvss: 6.5
+owasp: A02:2021 – Cryptographic Failures
+endpoint: https://localhost:44315
+description: "Insecure TLS renegotiation allows plaintext injection."
+hints:
+  - "Use openssl s_client to inspect the certificate and cipher negotiation."
+  - "Force specific protocols or ciphers with -ssl3, -tls1, or -cipher flags."
+  - "Check for exposed files or debug endpoints on the server."
+flag: "BHEDA{tls_renegotiation}"
+flag_location: "HTTPS response body on port 44315"
+solution_summary: "Connect with appropriate openssl flags. For renegotiation: openssl s_client -connect localhost:${PORT}"

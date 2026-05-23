@@ -1,0 +1,15 @@
+id: auth-09
+title: "Authentication Bypass - Challenge 09"
+category: web
+difficulty: medium
+cvss: 8.2
+owasp: A07:2021 – Identification and Authentication Failures
+endpoint: /api/auth/09
+description: "Authentication flaw: weak password policy allows brute-force."
+hints:
+  - "Check for default credentials like admin:admin."
+  - "The session ID does not change after login (session fixation)."
+  - "The password reset token is predictable (timestamp-based)."
+flag: "BHEDA{auth_bypass_09}"
+flag_location: "Dashboard or profile page after authentication bypass"
+solution_summary: "Use default credentials admin:admin to log in and access the admin dashboard containing the flag."

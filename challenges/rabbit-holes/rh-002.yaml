@@ -1,0 +1,8 @@
+id: rh-02
+title: "Rabbit Hole 02"
+type: dead_end_chain
+service: apache
+path: /.git/config.02.old
+description: "A dead_end_chain rabbit hole. This looks like a promising attack vector but leads nowhere. The endpoint responds with fake credentials and decoy data to waste attacker time."
+response: {"error":"not_found","message":"This endpoint is monitored. Your IP has been logged."}
+detection_risk: "High — accessing this endpoint triggers an alert in the SIEM"

@@ -1,0 +1,15 @@
+id: infra-1
+title: "Infrastructure Weakness - Challenge 1"
+category: web
+difficulty: easy
+cvss: 7.0
+owasp: A05:2021 – Security Misconfiguration
+endpoint: /infra/1
+description: "Infrastructure flaw: cloud metadata endpoint accessible from application server."
+hints:
+  - "Check for exposed management interfaces on common ports."
+  - "The Docker socket at /var/run/docker.sock may be readable."
+  - "Cloud metadata can be accessed from within the cloud environment."
+flag: "BHEDA{infra_challenge_1}"
+flag_location: "Cloud metadata or Kubernetes secret"
+solution_summary: "Access http://169.254.169.254/latest/meta-data/iam/security-credentials/ to get cloud provider credentials, then access the storage bucket containing the flag."

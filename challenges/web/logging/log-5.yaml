@@ -1,0 +1,15 @@
+id: log-5
+title: "Logging & Monitoring - Challenge 5"
+category: web
+difficulty: hard
+cvss: 7.8
+owasp: A09:2021 – Security Logging and Monitoring Failures
+endpoint: /api/logging/5
+description: "Logging deficiency: log files are world-readable exposing secrets."
+hints:
+  - "Check world-readable files in /var/log/."
+  - "Search for log files containing application debug output."
+  - "Failed login attempts may reveal valid usernames in response timing."
+flag: "BHEDA{logging_failure_5}"
+flag_location: "Server log file"
+solution_summary: "Read /var/log/application.log to find plaintext passwords and session tokens that were inadvertently logged."

@@ -1,0 +1,8 @@
+id: rh-35
+title: "Rabbit Hole 35"
+type: 
+service: elasticsearch
+path: /.git/config.35.old
+description: "A  rabbit hole. This appears to be a vulnerability but is intentionally misleading. The endpoint responds with fake credentials and decoy data to waste attacker time."
+response: <html><body><h1>Admin Panel</h1><p>Login required. All attempts are recorded.</p></body></html>
+detection_risk: "High — accessing this endpoint triggers an alert in the SIEM"

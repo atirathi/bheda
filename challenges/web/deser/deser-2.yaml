@@ -1,0 +1,15 @@
+id: deser-2
+title: "Insecure Deserialization - Challenge 2"
+category: web
+difficulty: easy
+cvss: 7.5
+owasp: A08:2021 – Software and Data Integrity Failures
+endpoint: /api/deser/2
+description: "Insecure deserialization in the session cookie (base64 encoded Pickle)."
+hints:
+  - "Decode the serialized object to see its structure."
+  - "Craft a malicious serialized object that executes a command."
+  - "Use ysoserial or similar to generate a payload."
+flag: "BHEDA{deser_challenge_2}"
+flag_location: "Server filesystem after RCE"
+solution_summary: "Craft a malicious Pickle payload that executes 'cat /flag.txt' and send it as the session cookie."

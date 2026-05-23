@@ -1,0 +1,15 @@
+id: ssrf-03
+title: "Server-Side Request Forgery - Challenge 03"
+category: web
+difficulty: easy
+cvss: 7.5
+owasp: A10:2021 – Server-Side Request Forgery
+endpoint: /api/ssrf/03
+description: "SSRF vulnerability in the webhook validation endpoint. The application fetches user-supplied URLs with a blocklist that can be bypassed."
+hints:
+  - "The server fetches URLs you provide. Try accessing internal services."
+  - "Use file:// protocol to read local files."
+  - "Bypass the blocklist using alternative representations like 127.1 or [::]."
+flag: "BHEDA{ssrf_challenge_03}"
+flag_location: "/etc/flag or internal metadata endpoint"
+solution_summary: "Submit a request to http://169.254.169.254/latest/meta-data/ to read cloud metadata and find the flag."

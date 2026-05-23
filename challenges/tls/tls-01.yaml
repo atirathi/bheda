@@ -1,0 +1,15 @@
+id: tls-01
+title: "TLS "
+category: tls
+difficulty: 
+cvss: 
+owasp: A02:2021 – Cryptographic Failures
+endpoint: https://localhost:44301
+description: ""
+hints:
+  - "Use openssl s_client to inspect the certificate and cipher negotiation."
+  - "Force specific protocols or ciphers with -ssl3, -tls1, or -cipher flags."
+  - "Check for exposed files or debug endpoints on the server."
+flag: "BHEDA{tls_}"
+flag_location: "HTTPS response body on port 44301"
+solution_summary: "Connect with appropriate openssl flags. For : openssl s_client -connect localhost:${PORT}"

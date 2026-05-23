@@ -1,0 +1,15 @@
+id: tls-10
+title: "TLS null-cipher"
+category: tls
+difficulty: medium
+cvss: 7.0
+owasp: A02:2021 – Cryptographic Failures
+endpoint: https://localhost:44310
+description: "NULL cipher suites accepted providing no encryption."
+hints:
+  - "Use openssl s_client to inspect the certificate and cipher negotiation."
+  - "Force specific protocols or ciphers with -ssl3, -tls1, or -cipher flags."
+  - "Check for exposed files or debug endpoints on the server."
+flag: "BHEDA{tls_null_cipher}"
+flag_location: "HTTPS response body on port 44310"
+solution_summary: "Connect with appropriate openssl flags. For null-cipher: openssl s_client -connect localhost:${PORT}"

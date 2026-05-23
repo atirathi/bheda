@@ -1,0 +1,272 @@
+# ─── Traefik Dynamic Configuration ───
+# Bheda Cloud Deployment — ACME TLS, Team Routing, Rate Limiting
+
+http:
+  routers:
+    # ─── API Backend ───
+    api:
+      rule: "Host(`bheda.ctf`) && PathPrefix(`/api`) || HostRegexp(`{subdomain:[a-z0-9-]+}.bheda.ctf`) && PathPrefix(`/api`)"
+      entryPoints:
+        - web
+        - websecure
+      service: backend
+      middlewares:
+        - api-rate-limit
+        - cors-headers
+        - security-headers
+      tls:
+        certResolver: letsencrypt
+
+    # ─── WebSocket CTF Engine ───
+    ctf-ws:
+      rule: "Host(`bheda.ctf`) && PathPrefix(`/ws`) || HostRegexp(`{subdomain:[a-z0-9-]+}.bheda.ctf`) && PathPrefix(`/ws`)"
+      entryPoints:
+        - websecure
+      service: ctf-engine
+      middlewares:
+        - ctf-rate-limit
+      tls:
+        certResolver: letsencrypt
+
+    # ─── Frontend ───
+    frontend:
+      rule: "Host(`bheda.ctf`) || HostRegexp(`{subdomain:[a-z0-9-]+}.bheda.ctf`)"
+      entryPoints:
+        - web
+        - websecure
+      service: frontend
+      middlewares:
+        - redirect-https
+        - security-headers
+      tls:
+        certResolver: letsencrypt
+
+    # ─── Dashboard ───
+    dashboard:
+      rule: "Host(`traefik.bheda.ctf`)"
+      entryPoints:
+        - dashboard
+      service: api@internal
+      middlewares:
+        - dashboard-auth
+        - security-headers
+      tls:
+        certResolver: letsencrypt
+
+    # ─── Team Subdomain Routing ───
+    team-api:
+      rule: "HostRegexp(`{team:[a-z0-9-]+}.bheda.ctf`) && PathPrefix(`/api`)"
+      entryPoints:
+        - websecure
+      service: backend
+      middlewares:
+        - team-rate-limit
+        - strip-team-prefix
+      tls:
+        certResolver: letsencrypt
+
+    team-frontend:
+      rule: "HostRegexp(`{team:[a-z0-9-]+}.bheda.ctf`)"
+      entryPoints:
+        - websecure
+      service: frontend
+      middlewares:
+        - security-headers
+      tls:
+        certResolver: letsencrypt
+
+    # ─── MinIO Console ───
+    minio-console:
+      rule: "Host(`minio.bheda.ctf`)"
+      entryPoints:
+        - websecure
+      service: minio-console
+      middlewares:
+        - security-headers
+      tls:
+        certResolver: letsencrypt
+
+    # ─── HTTP → HTTPS Redirect ───
+    http-catchall:
+      rule: "HostRegexp(`{host:.+}`)"
+      entryPoints:
+        - web
+      middlewares:
+        - redirect-https
+
+  services:
+    backend:
+      loadBalancer:
+        servers:
+          - url: "http://backend:8000"
+        healthCheck:
+          path: /api/v1/health
+          interval: 15s
+          timeout: 5s
+        passHostHeader: true
+
+    frontend:
+      loadBalancer:
+        servers:
+          - url: "http://frontend:3000"
+        healthCheck:
+          path: /health
+          interval: 15s
+          timeout: 5s
+
+    ctf-engine:
+      loadBalancer:
+        servers:
+          - url: "http://ctf-engine:3004"
+        healthCheck:
+          path: /health
+          interval: 15s
+          timeout: 5s
+
+    minio-console:
+      loadBalancer:
+        servers:
+          - url: "http://minio:9001"
+        healthCheck:
+          path: /minio/health/live
+          interval: 15s
+          timeout: 5s
+
+  middlewares:
+    # ─── Rate Limiting ───
+    api-rate-limit:
+      rateLimit:
+        average: 30
+        burst: 50
+        period: 1s
+        sourceCriterion:
+          ipStrategy:
+            depth: 1
+
+    ctf-rate-limit:
+      rateLimit:
+        average: 10
+        burst: 20
+        period: 1s
+        sourceCriterion:
+          ipStrategy:
+            depth: 1
+
+    team-rate-limit:
+      rateLimit:
+        average: 60
+        burst: 100
+        period: 1s
+        sourceCriterion:
+          requestHost: true
+
+    login-rate-limit:
+      rateLimit:
+        average: 1
+        burst: 5
+        period: 1m
+        sourceCriterion:
+          ipStrategy:
+            depth: 1
+
+    # ─── Security ───
+    security-headers:
+      headers:
+        frameDeny: true
+        contentTypeNosniff: true
+        browserXssFilter: true
+        referrerPolicy: "strict-origin-when-cross-origin"
+        permissionsPolicy: "camera=(), microphone=(), geolocation=()"
+        customFrameOptionsValue: SAMEORIGIN
+        sslRedirect: true
+        sslProxyHeaders:
+          X-Forwarded-Proto: https
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        stsPreload: true
+
+    # ─── CORS ───
+    cors-headers:
+      headers:
+        accessControlAllowOriginList:
+          - "*"
+        accessControlAllowMethods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+          - PATCH
+          - OPTIONS
+        accessControlAllowHeaders:
+          - DNT
+          - User-Agent
+          - X-Requested-With
+          - If-Modified-Since
+          - Cache-Control
+          - Content-Type
+          - Range
+          - Authorization
+        accessControlExposeHeaders:
+          - Content-Length
+          - Content-Range
+        accessControlMaxAge: 86400
+
+    # ─── Redirect ───
+    redirect-https:
+      redirectScheme:
+        scheme: https
+        permanent: true
+
+    # ─── Strip Team Prefix ───
+    strip-team-prefix:
+      stripPrefixRegex:
+        - /[a-z0-9-]+/api
+
+    # ─── Dashboard Auth ───
+    dashboard-auth:
+      basicAuth:
+        users:
+          - "admin:$2y$10$8K1p/a0dL1LXMIgoEDFrwOfMQkf9Rn0g8iJxK3c5G5nX5e5m5H5Ke"
+          - "operator:$2y$10$8K1p/a0dL1LXMIgoEDFrwOfMQkf9Rn0g8iJxK3c5G5nX5e5m5H5Ke"
+
+tcp:
+  routers:
+    postgres:
+      rule: "HostSNI(`postgres.bheda.ctf`)"
+      entryPoints:
+        - postgres
+      service: postgres
+      tls:
+        certResolver: letsencrypt
+
+    redis:
+      rule: "HostSNI(`redis.bheda.ctf`)"
+      entryPoints:
+        - redis
+      service: redis
+      tls:
+        certResolver: letsencrypt
+
+  services:
+    postgres:
+      loadBalancer:
+        servers:
+          - address: "postgres:5432"
+
+    redis:
+      loadBalancer:
+        servers:
+          - address: "redis:6379"
+
+tls:
+  certificates:
+    - certFile: /etc/traefik/certs/bheda.crt
+      keyFile: /etc/traefik/certs/bheda.key
+      stores:
+        - default
+
+  stores:
+    default:
+      defaultCertificate:
+        certFile: /etc/traefik/certs/bheda.crt
+        keyFile: /etc/traefik/certs/bheda.key

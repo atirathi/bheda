@@ -1,0 +1,8 @@
+id: rh-24
+title: "Rabbit Hole 24"
+type: circular
+service: mysql
+path: /debug/backup/config-24.bak
+description: "A circular rabbit hole. This looks like a promising attack vector but leads nowhere. The endpoint responds with fake credentials and decoy data to waste attacker time."
+response: {"error":"not_found","message":"This endpoint is monitored. Your IP has been logged."}
+detection_risk: "High — accessing this endpoint triggers an alert in the SIEM"

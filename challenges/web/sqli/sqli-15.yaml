@@ -1,0 +1,15 @@
+id: sqli-15
+title: "SQL Injection - Challenge 15"
+category: web
+difficulty: hard
+cvss: 9.1
+owasp: A03:2021 – Injection
+endpoint: /api/sqli/15
+description: "SQL injection vulnerability in the search endpoint. The id parameter is directly concatenated into the query without sanitization."
+hints:
+  - "Test for basic SQL injection patterns in the input field."
+  - "Use UNION-based injection to extract data from other tables."
+  - "The flag is stored in the users table under the flag column."
+flag: "BHEDA{sqli_challenge_15}"
+flag_location: "Database column: users.flag"
+solution_summary: "Inject UNION SELECT to extract flag from users table. Payload: ' UNION SELECT flag FROM users --"

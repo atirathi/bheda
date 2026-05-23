@@ -1,0 +1,15 @@
+id: race-5
+title: "Race Condition - Challenge 5"
+category: web
+difficulty: medium
+cvss: 7.5
+owasp: A01:2021 – Broken Access Control
+endpoint: /api/race/5
+description: "Race condition in the file upload verification logic. Concurrent requests bypass the check-then-use pattern."
+hints:
+  - "Send multiple concurrent requests to the endpoint."
+  - "The check for sufficient balance happens before the deduction."
+  - "Use curl with parallel requests or a race condition tool."
+flag: "BHEDA{race_condition_5}"
+flag_location: "Coupon/wallet balance after race exploitation"
+solution_summary: "Send 50 concurrent requests to redeem the same coupon. The race condition allows multiple redemptions before the used flag is set."

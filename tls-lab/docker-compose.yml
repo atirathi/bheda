@@ -1,0 +1,136 @@
+version: '3.8'
+
+services:
+  tls-01-self-signed:
+    image: nginx:1.24-alpine
+    ports: ["44301:44301"]
+    volumes:
+      - ./configs/01-self-signed.conf:/etc/nginx/conf.d/default.conf
+      - ./certs/self-signed:/certs/self-signed
+    networks: [tls-net]
+
+  tls-02-expired:
+    image: nginx:1.24-alpine
+    ports: ["44302:44302"]
+    volumes:
+      - ./configs/02-expired.conf:/etc/nginx/conf.d/default.conf
+      - ./certs/expired:/certs/expired
+    networks: [tls-net]
+
+  tls-03-wildcard:
+    image: nginx:1.24-alpine
+    ports: ["44303:44303"]
+    volumes:
+      - ./configs/03-wildcard.conf:/etc/nginx/conf.d/default.conf
+      - ./certs/wildcard:/certs/wildcard
+    networks: [tls-net]
+
+  tls-04-cn-san:
+    image: nginx:1.24-alpine
+    ports: ["44304:44304"]
+    volumes:
+      - ./configs/04-cn-san.conf:/etc/nginx/conf.d/default.conf
+      - ./certs/ca:/certs/ca
+    networks: [tls-net]
+
+  tls-05-crl-disabled:
+    image: nginx:1.24-alpine
+    ports: ["44305:44305"]
+    volumes:
+      - ./configs/05-crl-disabled.conf:/etc/nginx/conf.d/default.conf
+      - ./certs/ca:/certs/ca
+      - ./certs/revoked:/certs/revoked
+    networks: [tls-net]
+
+  tls-06-rsa512:
+    image: nginx:1.24-alpine
+    ports: ["44306:44306"]
+    volumes:
+      - ./configs/06-rsa512.conf:/etc/nginx/conf.d/default.conf
+      - ./certs/rsa512:/certs/rsa512
+    networks: [tls-net]
+
+  tls-07-sslv3:
+    image: nginx:1.24-alpine-slim
+    ports: ["44307:44307"]
+    volumes:
+      - ./configs/07-sslv3.conf:/etc/nginx/conf.d/default.conf
+      - ./certs/self-signed:/certs/self-signed
+    networks: [tls-net]
+
+  tls-08-rc4:
+    image: nginx:1.24-alpine
+    ports: ["44308:44308"]
+    volumes:
+      - ./configs/08-rc4.conf:/etc/nginx/conf.d/default.conf
+      - ./certs/self-signed:/certs/self-signed
+    networks: [tls-net]
+
+  tls-09-null-cipher:
+    image: nginx:1.24-alpine
+    ports: ["44309:44309"]
+    volumes:
+      - ./configs/09-null-cipher.conf:/etc/nginx/conf.d/default.conf
+      - ./certs/self-signed:/certs/self-signed
+    networks: [tls-net]
+
+  tls-10-tls1.0:
+    image: nginx:1.24-alpine
+    ports: ["44310:44310"]
+    volumes:
+      - ./configs/10-tls1.0.conf:/etc/nginx/conf.d/default.conf
+      - ./certs/self-signed:/certs/self-signed
+    networks: [tls-net]
+
+  tls-11-export-dh:
+    image: nginx:1.24-alpine
+    ports: ["44311:44311"]
+    volumes:
+      - ./configs/11-export-dh.conf:/etc/nginx/conf.d/default.conf
+      - ./certs/self-signed:/certs/self-signed
+    networks: [tls-net]
+
+  tls-12-compression:
+    image: nginx:1.24-alpine
+    ports: ["44312:44312"]
+    volumes:
+      - ./configs/12-compression.conf:/etc/nginx/conf.d/default.conf
+      - ./certs/self-signed:/certs/self-signed
+    networks: [tls-net]
+
+  tls-13-heartbleed:
+    image: nginx:1.24-alpine
+    ports: ["44313:44313"]
+    volumes:
+      - ./configs/13-heartbleed.conf:/etc/nginx/conf.d/default.conf
+      - ./certs/self-signed:/certs/self-signed
+    networks: [tls-net]
+
+  tls-14-renegotiation:
+    image: nginx:1.24-alpine
+    ports: ["44314:44314"]
+    volumes:
+      - ./configs/14-renegotiation.conf:/etc/nginx/conf.d/default.conf
+      - ./certs/self-signed:/certs/self-signed
+    networks: [tls-net]
+
+  tls-15-session-ticket:
+    image: nginx:1.24-alpine
+    ports: ["44315:44315"]
+    volumes:
+      - ./configs/15-session-ticket.conf:/etc/nginx/conf.d/default.conf
+      - ./certs/session:/certs/session
+      - ./certs/self-signed:/certs/self-signed
+    networks: [tls-net]
+
+  tls-16-breach:
+    image: nginx:1.24-alpine
+    ports: ["44316:44316"]
+    volumes:
+      - ./configs/16-breach.conf:/etc/nginx/conf.d/default.conf
+      - ./certs/self-signed:/certs/self-signed
+    networks: [tls-net]
+
+networks:
+  tls-net:
+    driver: bridge

@@ -1,0 +1,15 @@
+id: biz-02
+title: "Business Logic Flaw - Challenge 02"
+category: web
+difficulty: easy
+cvss: 5.5
+owasp: A01:2021 – Broken Access Control
+endpoint: /api/biz/02
+description: "Business logic vulnerability: price parameter is not validated server-side during checkout."
+hints:
+  - "Try submitting negative quantities or prices."
+  - "Intercept the request and modify the price parameter."
+  - "The same coupon code can be applied multiple times."
+flag: "BHEDA{biz_logic_02}"
+flag_location: "Order confirmation page or account balance"
+solution_summary: "Set item price to -100 during checkout. The system processes a negative charge, increasing your balance. Purchase the premium item with the inflated balance to get the flag."

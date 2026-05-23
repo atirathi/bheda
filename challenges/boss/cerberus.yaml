@@ -1,0 +1,33 @@
+id: boss-cerberus
+title: "CERBERUS — Three Gates of Hell"
+category: boss
+difficulty: boss
+cvss: 9.5
+owasp: A05:2021 – Security Misconfiguration
+endpoint: /boss/cerberus
+description: "A 4-step boss chain requiring bypassing three WAF layers to reach the backend flag."
+hints:
+  - "Step 1: WAF layer 1 blocks SQLi keywords. Use comments to bypass."
+  - "Step 2: WAF layer 2 blocks UNION. Use HTTP parameter pollution."
+  - "Step 3: WAF layer 3 blocks SELECT. Use chunked encoding to split payload."
+  - "Step 4: Access the flag from the database after WAF bypass."
+flag: "BHEDA{boss_cerberus_complete}"
+flag_location: "Database query result after WAF bypass"
+solution_summary: "Three WAF bypasses stacked: inline comments, HPP, and chunked encoding evasions to execute SQL injection."
+steps:
+  - id: cerberus-1
+    description: "Bypass WAF layer 1 with SQL comments"
+    endpoint: /boss/cerberus/gate1
+    solution: "'/**/OR/**/1=1--"
+  - id: cerberus-2
+    description: "Bypass WAF layer 2 with HTTP parameter pollution"
+    endpoint: /boss/cerberus/gate2
+    solution: "?id=1&id=UNION&id=SELECT&id=1,flag&id=FROM&id=users"
+  - id: cerberus-3
+    description: "Bypass WAF layer 3 with chunked TE"
+    endpoint: /boss/cerberus/gate3
+    solution: "Transfer-Encoding: chunked with payload split across chunks"
+  - id: cerberus-4
+    description: "Extract flag from database"
+    endpoint: /boss/cerberus/flag
+    solution: "Final SQLi pulls flag column from hidden table"

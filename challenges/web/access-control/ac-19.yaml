@@ -1,0 +1,15 @@
+id: ac-19
+title: "Access Control Bypass - Challenge 19"
+category: web
+difficulty: hard
+cvss: 8.9
+owasp: A01:2021 – Broken Access Control
+endpoint: /api/ac/19
+description: "An authorization bypass vulnerability where IDOR allows accessing other users data by changing a numeric parameter."
+hints:
+  - "Manipulate the role or permission parameter in the request."
+  - "Try accessing /admin or /api/admin directly."
+  - "Change the user_id parameter to access other accounts."
+flag: "BHEDA{access_control_bypass_19}"
+flag_location: "/admin endpoint or other user's profile page"
+solution_summary: "Modify the GET /api/user?id=1 to id=2 to access the admin user's profile which contains the flag."

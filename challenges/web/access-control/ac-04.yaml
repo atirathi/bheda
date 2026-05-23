@@ -1,0 +1,15 @@
+id: ac-04
+title: "Access Control Bypass - Challenge 04"
+category: web
+difficulty: easy
+cvss: 6.5
+owasp: A01:2021 – Broken Access Control
+endpoint: /api/ac/04
+description: "An authorization bypass vulnerability where the admin panel is accessible via direct path traversal."
+hints:
+  - "Manipulate the role or permission parameter in the request."
+  - "Try accessing /admin or /api/admin directly."
+  - "Change the user_id parameter to access other accounts."
+flag: "BHEDA{access_control_bypass_04}"
+flag_location: "/admin endpoint or other user's profile page"
+solution_summary: "Modify the GET /api/user?id=1 to id=2 to access the admin user's profile which contains the flag."

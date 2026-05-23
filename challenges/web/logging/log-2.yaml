@@ -1,0 +1,15 @@
+id: log-2
+title: "Logging & Monitoring - Challenge 2"
+category: web
+difficulty: easy
+cvss: 5.5
+owasp: A09:2021 – Security Logging and Monitoring Failures
+endpoint: /api/logging/2
+description: "Logging deficiency: sensitive data is logged in plaintext (credit cards, passwords)."
+hints:
+  - "Check world-readable files in /var/log/."
+  - "Search for log files containing application debug output."
+  - "Failed login attempts may reveal valid usernames in response timing."
+flag: "BHEDA{logging_failure_2}"
+flag_location: "Server log file"
+solution_summary: "Read /var/log/application.log to find plaintext passwords and session tokens that were inadvertently logged."

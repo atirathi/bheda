@@ -1,0 +1,28 @@
+id: boss-kraken
+title: "KRAKEN — Supply Chain Leviathan"
+category: boss
+difficulty: boss
+cvss: 10.0
+owasp: A08:2021 – Software and Data Integrity Failures
+endpoint: /boss/kraken
+description: "A 3-step boss chain simulating a supply chain worm. Infect a build pipeline dependency to propagate through 3 connected services automatically."
+hints:
+  - "Step 1: Poison a public npm package dependency via dependency confusion."
+  - "Step 2: The poisoned package executes during CI/CD build and steals credentials."
+  - "Step 3: Use stolen credentials to access production and extract flag."
+flag: "BHEDA{boss_kraken_complete}"
+flag_location: "Production database after supply chain compromise"
+solution_summary: "Publish malicious package to public registry with higher version -> CI picks it up -> creds leaked -> production access"
+steps:
+  - id: kraken-1
+    description: "Dependency confusion on internal package name"
+    endpoint: /boss/kraken/package
+    solution: "Publish @internal/logger to npm with higher version, postinstall script exfiltrates CI env vars"
+  - id: kraken-2
+    description: "CI/CD credential theft via poisoned package"
+    endpoint: /boss/kraken/ci
+    solution: "postinstall script reads CI_JOB_TOKEN, sends to attacker webhook"
+  - id: kraken-3
+    description: "Production access with stolen credentials"
+    endpoint: /boss/kraken/prod
+    solution: "Use CI_JOB_TOKEN to call production API /api/flag"

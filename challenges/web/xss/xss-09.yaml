@@ -1,0 +1,15 @@
+id: xss-09
+title: "Cross-Site Scripting - Challenge 09"
+category: web
+difficulty: medium
+cvss: 7.3
+owasp: A03:2021 – Injection
+endpoint: /api/xss/09
+description: "XSS vulnerability in the search bar. Input is reflected into the page without any encoding."
+hints:
+  - "Inject a script tag to test for XSS."
+  - "The filter blocks <script> but allows other tags like <img> with onerror."
+  - "Use event handlers like onfocus or onmouseover to trigger JavaScript execution."
+flag: "BHEDA{xss_challenge_09}"
+flag_location: "Document cookie or localStorage after XSS execution"
+solution_summary: "Inject <img src=x onerror=alert(document.cookie)> to trigger XSS and steal the session cookie containing the flag."

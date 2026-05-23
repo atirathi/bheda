@@ -1,0 +1,15 @@
+id: deser-9
+title: "Insecure Deserialization - Challenge 9"
+category: web
+difficulty: hard
+cvss: 9.8
+owasp: A08:2021 – Software and Data Integrity Failures
+endpoint: /api/deser/9
+description: "Insecure deserialization in the Java serialized object in request body."
+hints:
+  - "Decode the serialized object to see its structure."
+  - "Craft a malicious serialized object that executes a command."
+  - "Use ysoserial or similar to generate a payload."
+flag: "BHEDA{deser_challenge_9}"
+flag_location: "Server filesystem after RCE"
+solution_summary: "Craft a malicious Pickle payload that executes 'cat /flag.txt' and send it as the session cookie."

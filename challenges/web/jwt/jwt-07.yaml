@@ -1,0 +1,15 @@
+id: jwt-07
+title: "JWT Security - Challenge 07"
+category: web
+difficulty: medium
+cvss: 7.8
+owasp: A02:2021 – Cryptographic Failures
+endpoint: /api/jwt/07
+description: "JWT vulnerability: JWT claim injection"
+hints:
+  - "Decode the JWT and examine its header and payload."
+  - "Try modifying the algorithm to 'none'."
+  - "The secret key is weak and can be brute-forced."
+flag: "BHEDA{jwt_challenge_07}"
+flag_location: "JWT payload or admin-only endpoint"
+solution_summary: "Decode JWT, change alg to 'none', set role to admin, and re-encode to generate a forged token."

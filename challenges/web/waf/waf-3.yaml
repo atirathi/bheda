@@ -1,0 +1,15 @@
+id: waf-3
+title: "WAF Bypass - Challenge 3"
+category: web
+difficulty: hard
+cvss: 8.8
+owasp: A03:2021 – Injection
+endpoint: /api/waf/3
+description: "WAF bypass technique: HTTP/2 downgrade bypass."
+hints:
+  - "Insert a newline character in the SQL payload."
+  - "Use Unicode fullwidth characters to evade pattern matching."
+  - "Split the payload across HTTP/2 frames."
+flag: "BHEDA{waf_bypass_3}"
+flag_location: "Database after successful SQL injection"
+solution_summary: "Inject ' UNION%0ASELECT%201,flag%20FROM%20users-- using URL-encoded newline to split the payload and evade the WAF regex."

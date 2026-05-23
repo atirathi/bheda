@@ -1,0 +1,15 @@
+id: ws-3
+title: "WebSocket Security - Challenge 3"
+category: web
+difficulty: medium
+cvss: 7.8
+owasp: A01:2021 – Broken Access Control
+endpoint: /ws/3
+description: "WebSocket vulnerability: no authentication required to join admin WebSocket channel."
+hints:
+  - "Connect to the WebSocket endpoint without authentication."
+  - "Send a crafted message to trigger an admin command."
+  - "The WebSocket server broadcasts sensitive data to all connected clients."
+flag: "BHEDA{websocket_challenge_3}"
+flag_location: "WebSocket message stream"
+solution_summary: "Connect to ws://target/ws/admin without auth and listen for messages containing the flag broadcast to all clients."

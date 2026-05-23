@@ -1,0 +1,15 @@
+id: waf-2
+title: "WAF Bypass - Challenge 2"
+category: web
+difficulty: medium
+cvss: 7.5
+owasp: A03:2021 – Injection
+endpoint: /api/waf/2
+description: "WAF bypass technique: Unicode normalization bypass."
+hints:
+  - "Insert a newline character in the SQL payload."
+  - "Use Unicode fullwidth characters to evade pattern matching."
+  - "Split the payload across HTTP/2 frames."
+flag: "BHEDA{waf_bypass_2}"
+flag_location: "Database after successful SQL injection"
+solution_summary: "Inject ' UNION%0ASELECT%201,flag%20FROM%20users-- using URL-encoded newline to split the payload and evade the WAF regex."

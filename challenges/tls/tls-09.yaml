@@ -1,0 +1,15 @@
+id: tls-09
+title: "TLS rc4"
+category: tls
+difficulty: medium
+cvss: 6.5
+owasp: A02:2021 – Cryptographic Failures
+endpoint: https://localhost:44309
+description: "RC4 cipher enabled with known statistical biases."
+hints:
+  - "Use openssl s_client to inspect the certificate and cipher negotiation."
+  - "Force specific protocols or ciphers with -ssl3, -tls1, or -cipher flags."
+  - "Check for exposed files or debug endpoints on the server."
+flag: "BHEDA{tls_rc4}"
+flag_location: "HTTPS response body on port 44309"
+solution_summary: "Connect with appropriate openssl flags. For rc4: openssl s_client -connect localhost:${PORT}"

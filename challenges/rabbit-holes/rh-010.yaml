@@ -1,0 +1,8 @@
+id: rh-10
+title: "Rabbit Hole 10"
+type: 
+service: 
+path: /internal/api/v10/admin/panel
+description: "A  rabbit hole. This looks like a promising attack vector but leads nowhere. The endpoint responds with fake credentials and decoy data to waste attacker time."
+response: {"error":"not_found","message":"This endpoint is monitored. Your IP has been logged."}
+detection_risk: "High — accessing this endpoint triggers an alert in the SIEM"

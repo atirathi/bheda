@@ -1,0 +1,15 @@
+id: wasm-5
+title: "WebAssembly Security - Challenge 5"
+category: web
+difficulty: hard
+cvss: 8.5
+owasp: A02:2021 – Cryptographic Failures
+endpoint: /wasm/5
+description: "WASM security issue: WASM implements cryptographic operations that can be extracted and reused."
+hints:
+  - "Download the .wasm file and use wasm2wat to decompile it."
+  - "Look for hardcoded strings and comparison functions."
+  - "The flag check function can be reversed to reveal the correct input."
+flag: "BHEDA{wasm_challenge_5}"
+flag_location: "WASM binary strings or function output"
+solution_summary: "Use wasm2wat to decompile main.wasm, find the check_password function, reverse the XOR obfuscation to reveal the flag."

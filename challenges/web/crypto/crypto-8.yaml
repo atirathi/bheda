@@ -1,0 +1,15 @@
+id: crypto-8
+title: "Cryptographic Failure - Challenge 8"
+category: web
+difficulty: hard
+cvss: 9.1
+owasp: A02:2021 – Cryptographic Failures
+endpoint: /api/crypto/8
+description: "Cryptographic flaw: predictable random number generator used for session tokens."
+hints:
+  - "ECB mode encrypts identical plaintext blocks identically. Rearrange ciphertext blocks."
+  - "MD5 hashes can be looked up in rainbow tables."
+  - "The PRNG is seeded with the current timestamp."
+flag: "BHEDA{crypto_challenge_8}"
+flag_location: "Decrypted ciphertext or cracked hash"
+solution_summary: "For ECB: swap ciphertext blocks to change the decrypted data to admin=true. For MD5: look up the hash in CrackStation to find the plaintext password."

@@ -1,0 +1,66 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: bheda
+
+namePrefix: bheda-
+nameSuffix: ~
+
+commonLabels:
+  app: bheda
+  managed-by: kustomize
+  environment: production
+
+resources:
+  - backend-deployment.yml
+  - frontend-deployment.yml
+  - vuln-app-deployment.yml
+
+images:
+  - name: ghcr.io/atirathi/bheda/backend
+    newTag: latest
+  - name: ghcr.io/atirathi/bheda/frontend
+    newTag: latest
+  - name: ghcr.io/atirathi/bheda/vuln-app
+    newTag: latest
+
+configMapGenerator:
+  - name: global-config
+    literals:
+      - LOG_LEVEL=INFO
+      - ENVIRONMENT=production
+      - REGION=us-east-1
+
+secretGenerator:
+  - name: global-secret
+    literals:
+      - INTERNAL_API_KEY=bheda-internal-api-key-2026
+    type: Opaque
+
+patches:
+  - target:
+      kind: Deployment
+      name: backend
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: KUBERNETES_CLUSTER
+          value: "bheda-prod-eks"
+  - target:
+      kind: Deployment
+      name: vuln-app
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: WAF_ENABLED
+          value: "true"
+
+configurations:
+  - name: bheda-config
+    behavior: merge
+    files:
+      - config/backend.env
+      - config/frontend.env
+      - config/vuln-app.env

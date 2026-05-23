@@ -1,0 +1,15 @@
+id: ws-6
+title: "WebSocket Security - Challenge 6"
+category: web
+difficulty: hard
+cvss: 9.0
+owasp: A01:2021 – Broken Access Control
+endpoint: /ws/6
+description: "WebSocket vulnerability: WebSocket does not verify origin header allowing CSWSH."
+hints:
+  - "Connect to the WebSocket endpoint without authentication."
+  - "Send a crafted message to trigger an admin command."
+  - "The WebSocket server broadcasts sensitive data to all connected clients."
+flag: "BHEDA{websocket_challenge_6}"
+flag_location: "WebSocket message stream"
+solution_summary: "Connect to ws://target/ws/admin without auth and listen for messages containing the flag broadcast to all clients."

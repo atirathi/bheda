@@ -1,0 +1,15 @@
+id: xxe-2
+title: "XML External Entity - Challenge 2"
+category: web
+difficulty: easy
+cvss: 7.5
+owasp: A05:2021 – Security Misconfiguration
+endpoint: /api/xxe/2
+description: "XXE vulnerability in the XML-based configuration upload. The XML parser has external entity processing enabled."
+hints:
+  - "Inject an ENTITY declaration that reads a local file."
+  - "Use PHP wrappers like php://filter for base64 encoding."
+  - "Use out-of-band XXE to exfiltrate data to your server."
+flag: "BHEDA{xxe_challenge_2}"
+flag_location: "/etc/flag or application source code"
+solution_summary: "Inject <!ENTITY xxe SYSTEM 'file:///etc/flag'> and reference &xxe; in an XML element to read the flag file."

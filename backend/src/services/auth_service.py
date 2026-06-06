@@ -10,6 +10,14 @@ from src.models.user import User
 
 settings = get_settings()
 
+# Precomputed valid bcrypt hash of a known random string, used solely to
+# keep the work factor constant on the "user not found" branch of
+# `authenticate()`.  Generating this at module load is cheap (one
+# cost-12 hash) and lets us call `bcrypt.checkpw` with a real,
+# parseable hash so it returns False instead of raising ValueError on
+# malformed input.
+_DUMMY_HASH = bcrypt.hashpw(b"timing-oracle-guard", bcrypt.gensalt(rounds=12)).decode()
+
 
 class AuthService:
 
@@ -29,16 +37,24 @@ class AuthService:
             return user
 
     @staticmethod
-    async def authenticate(username: str, password: str) -> User | None:
+    async def authenticate(login: str, password: str, mfa_code: str | None = None) -> User | None:
+        # `login` may be either email or username. We always do a bcrypt
+        # compare against a (possibly-none) user to keep timing constant.
         async with async_session_factory() as session:
             result = await session.execute(
-                select(User).where(User.username == username)
+                select(User).where((User.username == login) | (User.email == login))
             )
             user = result.scalar_one_or_none()
             if user is None:
+                # Constant-time no-op compare to avoid leaking account existence.
+                # `_DUMMY_HASH` is a real bcrypt hash so this returns False
+                # (never raises) regardless of the input.
+                bcrypt.checkpw(password.encode(), _DUMMY_HASH.encode())
                 return None
             if not bcrypt.checkpw(password.encode(), user.password_hash.encode()):
                 return None
+            # MFA is a stub for now — when implemented, verify TOTP here.
+            _ = mfa_code  # currently unused
             user.last_login = datetime.now(timezone.utc)
             await session.commit()
             return user

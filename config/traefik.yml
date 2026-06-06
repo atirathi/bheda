@@ -223,40 +223,23 @@ http:
         - /[a-z0-9-]+/api
 
     # ─── Dashboard Auth ───
+    # Generate fresh hashes with: htpasswd -nbB -C 10 <user> "<password>"
+    # Each user MUST have a unique hash and unique password.
     dashboard-auth:
       basicAuth:
         users:
-          - "admin:$2y$10$8K1p/a0dL1LXMIgoEDFrwOfMQkf9Rn0g8iJxK3c5G5nX5e5m5H5Ke"
-          - "operator:$2y$10$8K1p/a0dL1LXMIgoEDFrwOfMQkf9Rn0g8iJxK3c5G5nX5e5m5H5Ke"
+          - "admin:$2y$10$qZwOHs42mPJJJgYpwN4Ptu4GOgP6xntBN0hF.QR0qDRUds1oNs6gq"
+          - "operator:$2y$10$YIgaJVQdMl8RSZJUFyWyZOmyv8nqs2AaFbKrgH1mg3vofUvT3c.Ji"
 
 tcp:
-  routers:
-    postgres:
-      rule: "HostSNI(`postgres.bheda.ctf`)"
-      entryPoints:
-        - postgres
-      service: postgres
-      tls:
-        certResolver: letsencrypt
-
-    redis:
-      rule: "HostSNI(`redis.bheda.ctf`)"
-      entryPoints:
-        - redis
-      service: redis
-      tls:
-        certResolver: letsencrypt
-
-  services:
-    postgres:
-      loadBalancer:
-        servers:
-          - address: "postgres:5432"
-
-    redis:
-      loadBalancer:
-        servers:
-          - address: "redis:6379"
+  # Postgres/Redis are intentionally NOT exposed via SNI to the public internet.
+  # Connection to these from outside the docker network should go through:
+  #   - the backend service (which speaks the protocols internally), or
+  #   - an SSH/SSM tunnel from an operator.
+  # If a future feature requires SNI routing, gate it behind a dedicated
+  # entry point bound to 127.0.0.1 (e.g., `pg-internal`) and require mTLS.
+  routers: {}
+  services: {}
 
 tls:
   certificates:

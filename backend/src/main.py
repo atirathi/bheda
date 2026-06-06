@@ -91,7 +91,11 @@ async def health_check():
 
 @app.websocket("/api/v1/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    await manager.connect(websocket)
+    try:
+        await manager.connect(websocket)
+    except RuntimeError:
+        # Rejected: connection was already closed by the manager.
+        return
     try:
         while True:
             data = await websocket.receive_json()

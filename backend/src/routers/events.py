@@ -24,7 +24,9 @@ async def list_events(current_user: User = Depends(get_current_user)):
 
 
 @router.get("/active")
-async def get_active_event():
+async def get_active_event(current_user: User = Depends(get_current_user)):
+    # Previously unauthenticated — anyone could enumerate every
+    # participating team and their instance ids.  Require auth.
     event = await CTFService.get_active_event()
     if event is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No active event")

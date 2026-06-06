@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Monitor, AlertTriangle, Shield, Activity, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useAdminStore, type MonitorEvent } from '@/store/admin';
+import { api } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 
 const severityConfig = {
@@ -14,6 +15,12 @@ const severityConfig = {
   error: { color: 'text-orange-500', bg: 'bg-orange-500/10' },
   critical: { color: 'text-red-500', bg: 'bg-red-500/10' },
 };
+
+interface MonitorHealth {
+  system: { platform?: string; cpu?: number; memory?: number };
+  database: { total_users?: number; total_challenges?: number };
+  redis: { connected?: boolean };
+}
 
 function EventIcon({ type }: { type: string }) {
   switch (type) {
@@ -30,13 +37,30 @@ function EventIcon({ type }: { type: string }) {
 
 export default function AdminMonitorPage() {
   const { monitorEvents, fetchMonitorEvents, addMonitorEvent } = useAdminStore();
+  const [health, setHealth] = useState<MonitorHealth | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  const fetchHealth = async () => {
+    try {
+      const data = await api.get<MonitorHealth>('/monitor/health');
+      setHealth(data);
+    } catch {
+      // silently fail
+    }
+  };
+
   useEffect(() => {
+    fetchHealth();
     fetchMonitorEvents();
-    // Simulate periodic fetch (in production, use WebSocket)
-    const interval = setInterval(fetchMonitorEvents, 30000);
-    return () => clearInterval(interval);
+    // Poll /monitor/health every 15s for live CPU/memory/redis status.
+    // The WebSocket at /api/v1/ws will eventually replace the
+    // `fetchMonitorEvents` poll once the backend pushes events there.
+    const healthInterval = setInterval(fetchHealth, 15000);
+    const eventsInterval = setInterval(fetchMonitorEvents, 30000);
+    return () => {
+      clearInterval(healthInterval);
+      clearInterval(eventsInterval);
+    };
   }, []);
 
   return (
@@ -51,7 +75,7 @@ export default function AdminMonitorPage() {
             Real-time event log and system monitoring
           </p>
         </div>
-        <Button variant="outline" onClick={fetchMonitorEvents}>
+        <Button variant="outline" onClick={() => { fetchHealth(); fetchMonitorEvents(); }}>
           <RefreshCw className="mr-2 h-4 w-4" />
           Refresh
         </Button>
@@ -110,6 +134,45 @@ export default function AdminMonitorPage() {
         </Card>
 
         <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Activity className="h-4 w-4" />
+                System Health
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Platform</span>
+                <span>{health?.system?.platform ?? '—'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">CPU</span>
+                <span>{health?.system?.cpu != null ? `${Math.round(health.system.cpu)}%` : '—'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Memory</span>
+                <span>{health?.system?.memory != null ? `${Math.round(health.system.memory)}%` : '—'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Redis</span>
+                <span>
+                  <Badge variant={health?.redis?.connected ? 'success' : 'destructive'}>
+                    {health?.redis?.connected ? 'connected' : 'down'}
+                  </Badge>
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Users</span>
+                <span>{health?.database?.total_users ?? 0}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Challenges</span>
+                <span>{health?.database?.total_challenges ?? 0}</span>
+              </div>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">

@@ -6,14 +6,32 @@ metadata:
     app: bheda
     component: vuln-app
 data:
-  DATABASE_URL: "postgresql://bheda:bheda_secret_2026@bheda-rds.cluster-xxxxxxx.us-east-1.rds.amazonaws.com:5432/bheda"
-  REDIS_URL: "redis://:bheda_redis_2026@bheda-redis.xxxxxx.ng.0001.use1.cache.amazonaws.com:6379/0"
-  MONGO_URL: "mongodb://bheda:bheda_mongo_2026@bheda-docdb.cluster-xxxxxxx.us-east-1.docdb.amazonaws.com:27017/bheda?tls=true&replicaSet=rs0&readPreference=secondaryPreferred&retryWrites=false"
   BACKEND_URL: "http://backend:8000"
   WAF_ENABLED: "true"
   WAF_URL: "http://waf:80"
-  FLAG_SECRET: "bheda_lab_secret_key_2024"
   LOG_LEVEL: "INFO"
+  NODE_ENV: "production"
+  PG_HOST: "bheda-rds"
+  PG_PORT: "5432"
+  PG_DB: "bheda"
+  PG_USER: "bheda"
+  MONGO_URI: "mongodb://bheda-docdb:27017/bheda"
+  REDIS_URL: "redis://bheda-redis:6379/0"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: vuln-app-secret
+  labels:
+    app: bheda
+    component: vuln-app
+type: Opaque
+stringData:
+  PG_PASS: "CHANGE_ME_postgres_password"
+  REDIS_PASSWORD: "CHANGE_ME_redis_password"
+  MONGO_PASSWORD: "CHANGE_ME_mongo_password"
+  FLAG_SECRET: "CHANGE_ME_flag_secret_min_32_chars"
 
 ---
 apiVersion: apps/v1
@@ -43,14 +61,16 @@ spec:
       terminationGracePeriodSeconds: 30
       containers:
         - name: vuln-app
-          image: ghcr.io/atirathi/bheda/vuln-app:latest
-          imagePullPolicy: Always
+          image: ghcr.io/atirathi/bheda/vuln-app:1.0.0
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 3001
               protocol: TCP
           envFrom:
             - configMapRef:
                 name: vuln-app-config
+            - secretRef:
+                name: vuln-app-secret
           resources:
             requests:
               memory: "256Mi"
@@ -77,6 +97,19 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+          # vuln-app runs intentionally vulnerable code; harden as much as
+          # possible without breaking challenge functionality.
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
       volumes:
         - name: tmp
           emptyDir: {}

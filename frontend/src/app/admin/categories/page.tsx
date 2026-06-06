@@ -65,10 +65,11 @@ export default function AdminCategoriesPage() {
     fetchCategories();
   }, []);
 
-  const handleToggle = async (id: string, isActive: boolean) => {
+  const handleToggle = async (id: string) => {
     try {
-      await api.patch(`/categories/${id}`, { is_active: isActive });
-      setCategories(categories.map((c) => (c.id === id ? { ...c, is_active: isActive } : c)));
+      // Backend uses POST /categories/{id}/toggle (no body, flips the bit).
+      await api.post(`/categories/${id}/toggle`);
+      await fetchCategories();
     } catch {
       // silently fail
     }
@@ -77,13 +78,16 @@ export default function AdminCategoriesPage() {
   const handleCreate = async () => {
     if (!newName.trim()) return;
     try {
-      const created = await api.post<Category>('/categories', {
+      // Backend now uses a JSON `CategoryCreate` body (Pydantic-validated).
+      // `color` is constrained to `#RGB`/`#RRGGBB` server-side; we still
+      // default to a known-safe value if the user leaves it blank.
+      await api.post(`/categories`, {
         name: newName.trim(),
-        icon: newIcon,
-        color: newColor,
+        icon: newIcon || null,
+        color: newColor || null,
       });
-      setCategories([...categories, created]);
       setNewName('');
+      await fetchCategories();
     } catch {
       // silently fail
     }
@@ -188,8 +192,8 @@ export default function AdminCategoriesPage() {
                 </p>
               </div>
               <Switch
-                checked={cat.is_active}
-                onCheckedChange={(v) => handleToggle(cat.id, v)}
+                checked={cat.enabled ?? cat.is_active}
+                onCheckedChange={() => handleToggle(cat.id)}
               />
               <Button
                 variant="ghost"

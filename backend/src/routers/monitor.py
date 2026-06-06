@@ -52,9 +52,10 @@ async def get_monitor_stats(current_user: User = Depends(require_admin)):
     return {
         "system": {
             "platform": platform.system(),
-            "platform_release": platform.release(),
-            "python_version": platform.python_version(),
-            "uptime": time.time() - psutil.boot_time() if HAS_PSUTIL else None,
+            # `boot_time` and `uptime` deliberately omitted — they
+            # reveal when the host was last (re)booted, which aids
+            # kernel-exploit planning against unpatched CVEs.
+            # `python_version` likewise leaks interpreter patch level.
         },
         "database": {
             "total_users": total_users,
@@ -71,6 +72,41 @@ async def get_monitor_stats(current_user: User = Depends(require_admin)):
     }
 
 
+@router.get("/health")
+async def get_monitor_health(current_user: User = Depends(require_admin)):
+    """Admin-only health view used by the dashboard.
+
+    Returns the same shape as `/monitor/stats` (`system` + `database` +
+    `redis`) without the historical counters — those are surfaced via
+    `/monitor/stats` so the dashboard can refresh only what's needed.
+    """
+    async with async_session_factory() as session:
+        users_result = await session.execute(select(func.count(User.id)))
+        challenges_result = await session.execute(select(func.count(Challenge.id)))
+
+    redis_conn = await get_redis()
+    redis_ping = False
+    try:
+        redis_ping = await redis_conn.ping()
+    except Exception:
+        pass
+
+    return {
+        "system": {
+            "platform": platform.system(),
+            "cpu": psutil.cpu_percent(interval=0.05) if HAS_PSUTIL else None,
+            "memory": psutil.virtual_memory().percent if HAS_PSUTIL else None,
+        },
+        "database": {
+            "total_users": users_result.scalar() or 0,
+            "total_challenges": challenges_result.scalar() or 0,
+        },
+        "redis": {
+            "connected": redis_ping,
+        },
+    }
+
+
 @router.get("/logs")
 async def get_logs(
     lines: int = Query(100, ge=1, le=1000),
@@ -83,8 +119,15 @@ async def get_logs(
 @router.get("/realtime")
 async def get_realtime_data(current_user: User = Depends(require_admin)):
     redis_conn = await get_redis()
-    keys = await redis_conn.keys("*")
+    # Use SCAN, never KEYS — KEYS is O(N) blocking and can DoS production.
+    active_keys = 0
+    async for _ in redis_conn.scan_iter(match="*", count=1000):
+        active_keys += 1
+        # Hard cap to avoid unbounded iteration on huge keyspaces.
+        if active_keys >= 100_000:
+            break
     return {
-        "active_keys": len(keys),
+        "active_keys": active_keys,
+        "truncated": active_keys >= 100_000,
         "message": "Use WebSocket for real-time data",
     }

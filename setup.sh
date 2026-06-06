@@ -4,9 +4,17 @@ set -euo pipefail
 # ╔══════════════════════════════════════════════════════════════╗
 # ║  Bheda — One-Click Setup (Windows / Linux / macOS)         ║
 # ║                                                             ║
-# ║  Run:                                                       ║
+# ║  Pin to a commit SHA, NOT master:                           ║
+# ║    SHA=<commit-sha>                                         ║
 # ║    curl -fsSL https://raw.githubusercontent.com/             ║
-# ║      atirathi/bheda/master/setup.sh | bash                  ║
+# ║      atirathi/bheda/${SHA}/setup.sh | bash                  ║
+# ║  Or use a tagged release:                                   ║
+# ║    curl -fsSL https://raw.githubusercontent.com/             ║
+# ║      atirathi/bheda/v1.0.0/setup.sh | bash                  ║
+# ║                                                             ║
+# ║  Never pipe master to bash — anyone with push access to the ║
+# ║  repo (or anyone who compromises a maintainer account) can  ║
+# ║  inject code into the bootstrap itself.                     ║
 # ╚══════════════════════════════════════════════════════════════╝
 
 REPO_URL="https://github.com/atirathi/bheda.git"

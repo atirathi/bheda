@@ -46,6 +46,35 @@ class ProfileService:
             config = profile.config
             updated_count = 0
 
+            # Strict allowlist of mutable columns for each entity. Anything
+            # else in the profile YAML is ignored — including `flag_hash`,
+            # `points`, `id`, `category_id`, and any relationship attributes.
+            CHALLENGE_MUTABLE = frozenset({
+                "title",
+                "description",
+                "difficulty",
+                "cvss_score",
+                "owasp_mapping",
+                "real_cve",
+                "endpoint",
+                "enabled",
+                "waf_enabled",
+                "hint_enabled",
+                "start_at",
+                "end_at",
+                "max_attempts",
+                "requires",
+                "metadata_",
+            })
+            CATEGORY_MUTABLE = frozenset({
+                "name",
+                "icon",
+                "color",
+                "sort_order",
+                "enabled",
+                "description",
+            })
+
             if "challenges" in config:
                 for chal_config in config["challenges"]:
                     chal_result = await session.execute(
@@ -54,7 +83,7 @@ class ProfileService:
                     challenge = chal_result.scalar_one_or_none()
                     if challenge:
                         for key, value in chal_config.items():
-                            if key != "id" and hasattr(challenge, key):
+                            if key in CHALLENGE_MUTABLE:
                                 setattr(challenge, key, value)
                         updated_count += 1
 
@@ -66,7 +95,7 @@ class ProfileService:
                     category = cat_result.scalar_one_or_none()
                     if category:
                         for key, value in cat_config.items():
-                            if key != "id" and hasattr(category, key):
+                            if key in CATEGORY_MUTABLE:
                                 setattr(category, key, value)
 
             await session.commit()

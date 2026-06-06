@@ -7,14 +7,11 @@ import {
   Save,
   X,
   RefreshCw,
-  CheckCircle2,
-  XCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
@@ -22,12 +19,12 @@ import { formatDate } from '@/lib/utils';
 interface CTFEventData {
   id: string;
   name: string;
-  description: string;
-  start_date: string;
-  end_date: string;
-  is_active: boolean;
+  description: string | null;
+  start_at: string | null;
+  end_at: string | null;
   max_team_size: number;
   status: string;
+  isolation_mode: boolean;
 }
 
 export default function AdminEventsPage() {
@@ -37,17 +34,17 @@ export default function AdminEventsPage() {
   const [form, setForm] = useState({
     name: '',
     description: '',
-    start_date: '',
-    end_date: '',
+    start_at: '',
+    end_at: '',
     max_team_size: 4,
-    is_active: false,
   });
 
   const fetchEvents = async () => {
     setIsLoading(true);
     try {
-      const data = await api.get<{ events: CTFEventData[] }>('/admin/events');
-      setEvents(data.events);
+      // Backend returns a bare list, not `{ events: [...] }`.
+      const data = await api.get<CTFEventData[]>('/events');
+      setEvents(data);
     } catch {
       // silently fail
     } finally {
@@ -61,9 +58,36 @@ export default function AdminEventsPage() {
 
   const handleCreate = async () => {
     try {
-      await api.post('/admin/events', form);
+      // Backend EventCreate expects ISO datetimes; the input is local
+      // datetime-local format, so convert to ISO before posting.
+      const body = {
+        name: form.name,
+        description: form.description || null,
+        start_at: form.start_at ? new Date(form.start_at).toISOString() : null,
+        end_at: form.end_at ? new Date(form.end_at).toISOString() : null,
+        max_team_size: form.max_team_size,
+      };
+      await api.post('/events', body);
       setShowCreate(false);
-      setForm({ name: '', description: '', start_date: '', end_date: '', max_team_size: 4, is_active: false });
+      setForm({ name: '', description: '', start_at: '', end_at: '', max_team_size: 4 });
+      fetchEvents();
+    } catch {
+      // silently fail
+    }
+  };
+
+  const handleStart = async (id: string) => {
+    try {
+      await api.post(`/events/${id}/start`);
+      fetchEvents();
+    } catch {
+      // silently fail
+    }
+  };
+
+  const handleEnd = async (id: string) => {
+    try {
+      await api.post(`/events/${id}/end`);
       fetchEvents();
     } catch {
       // silently fail
@@ -126,27 +150,20 @@ export default function AdminEventsPage() {
                 <Label>Start Date</Label>
                 <Input
                   type="datetime-local"
-                  value={form.start_date}
-                  onChange={(e) => setForm({ ...form, start_date: e.target.value })}
+                  value={form.start_at}
+                  onChange={(e) => setForm({ ...form, start_at: e.target.value })}
                 />
               </div>
               <div className="space-y-2">
                 <Label>End Date</Label>
                 <Input
                   type="datetime-local"
-                  value={form.end_date}
-                  onChange={(e) => setForm({ ...form, end_date: e.target.value })}
+                  value={form.end_at}
+                  onChange={(e) => setForm({ ...form, end_at: e.target.value })}
                 />
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Switch
-                checked={form.is_active}
-                onCheckedChange={(v) => setForm({ ...form, is_active: v })}
-              />
-              <Label>Active immediately</Label>
-            </div>
-            <Button onClick={handleCreate} disabled={!form.name || !form.start_date}>
+            <Button onClick={handleCreate} disabled={!form.name || !form.start_at}>
               <Save className="mr-2 h-4 w-4" />
               Create Event
             </Button>
@@ -186,10 +203,15 @@ export default function AdminEventsPage() {
                     >
                       {event.status}
                     </Badge>
-                    {event.is_active ? (
-                      <CheckCircle2 className="h-4 w-4 text-green-500" />
-                    ) : (
-                      <XCircle className="h-4 w-4 text-muted-foreground" />
+                    {event.status === 'pending' && (
+                      <Button size="sm" variant="outline" onClick={() => handleStart(event.id)}>
+                        Start
+                      </Button>
+                    )}
+                    {event.status === 'active' && (
+                      <Button size="sm" variant="outline" onClick={() => handleEnd(event.id)}>
+                        End
+                      </Button>
                     )}
                   </div>
                 </div>
@@ -198,15 +220,19 @@ export default function AdminEventsPage() {
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
                   <div>
                     <span className="text-muted-foreground">Start:</span>{' '}
-                    {formatDate(event.start_date)}
+                    {event.start_at ? formatDate(event.start_at) : '—'}
                   </div>
                   <div>
                     <span className="text-muted-foreground">End:</span>{' '}
-                    {formatDate(event.end_date)}
+                    {event.end_at ? formatDate(event.end_at) : '—'}
                   </div>
                   <div>
                     <span className="text-muted-foreground">Team Size:</span>{' '}
                     {event.max_team_size}
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Isolation:</span>{' '}
+                    {event.isolation_mode ? 'per-team' : 'shared'}
                   </div>
                 </div>
               </CardContent>

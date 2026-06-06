@@ -43,9 +43,9 @@ variable "public_subnet_cidrs" {
 
 # ─── EKS ───
 variable "eks_public_access_cidrs" {
-  description = "CIDRs allowed to access EKS public endpoint"
+  description = "CIDRs allowed to access EKS public endpoint. Default is empty (private-only) — must be set explicitly to expose the public endpoint, and SHOULD be a tight list of bastion/admin IPs."
   type        = list(string)
-  default     = ["0.0.0.0/0"]
+  default     = []
 }
 
 variable "eks_core_instance_types" {

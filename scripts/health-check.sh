@@ -3,6 +3,13 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
+# Load secrets from .env if present (preferred over committing hardcoded values).
+# If .env is missing, fall back to environment variables only.
+if [ -f "$SCRIPT_DIR/.env" ]; then
+  # shellcheck disable=SC1091
+  set -a; . "$SCRIPT_DIR/.env"; set +a
+fi
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -30,7 +37,17 @@ check_http() {
 check_ping() {
   local name="$1"
   local result
-  result=$(redis-cli -a bheda_redis_2026 ping 2>/dev/null || echo "FAIL")
+  # Use REDISCLI_AUTH env var to avoid putting the password on the command
+  # line (where it shows up in `ps` output).
+  if [ -n "${REDIS_PASSWORD:-}" ]; then
+    # REDISCLI_AUTH is consumed by redis-cli.
+    # shellcheck disable=SC2034
+    REDISCLI_AUTH="$REDIS_PASSWORD"
+    result=$(redis-cli ping 2>/dev/null || echo "FAIL")
+  else
+    warn "REDIS_PASSWORD not set in env; skipping redis check"
+    return
+  fi
   if [ "$result" = "PONG" ]; then
     echo -e "  ${GREEN}✓${NC} $name"
     ((PASS++))
@@ -42,7 +59,16 @@ check_ping() {
 
 check_pg() {
   local name="$1"
-  if pg_isready -U bheda -d bheda -h localhost -p 5432 2>/dev/null >/dev/null; then
+  # PGPASSWORD is the env-var equivalent of `psql -W` so the password
+  # never appears in `ps`.
+  if [ -n "${POSTGRES_PASSWORD:-}" ]; then
+    PGPASSWORD="$POSTGRES_PASSWORD" pg_isready -U "${POSTGRES_USER:-bheda}" \
+      -d "${POSTGRES_DB:-bheda}" -h localhost -p 5432 2>/dev/null >/dev/null
+  else
+    warn "POSTGRES_PASSWORD not set in env; skipping pg check"
+    return
+  fi
+  if [ $? -eq 0 ]; then
     echo -e "  ${GREEN}✓${NC} $name"
     ((PASS++))
   else

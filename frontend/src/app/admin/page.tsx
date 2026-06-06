@@ -2,13 +2,11 @@
 
 import { useEffect } from 'react';
 import {
-  LayoutDashboard,
   Users,
   Shield,
   Flag,
   Activity,
   Cpu,
-  HardDrive,
   Zap,
   RefreshCw,
   Plus,
@@ -46,24 +44,21 @@ export default function AdminDashboard() {
           title="Total Users"
           value={stats?.total_users ?? 0}
           icon={Users}
-          trend={5}
         />
         <StatsCard
-          title="Active CTF"
-          value={stats?.active_ctf ?? 0}
+          title="Active Events"
+          value={stats?.active_events ?? 0}
           icon={Activity}
         />
         <StatsCard
-          title="Challenges Solved"
-          value={stats?.challenges_solved ?? 0}
+          title="Challenges"
+          value={stats?.total_challenges ?? 0}
           icon={Shield}
-          trend={12}
         />
         <StatsCard
-          title="Flags Today"
-          value={stats?.flags_today ?? 0}
+          title="Submissions"
+          value={stats?.total_submissions ?? 0}
           icon={Flag}
-          trend={-3}
         />
       </div>
 
@@ -77,11 +72,11 @@ export default function AdminDashboard() {
               <div className="flex items-center justify-between text-sm">
                 <span className="flex items-center gap-2">
                   <Cpu className="h-4 w-4" />
-                  CPU
+                  CPU ({stats?.system?.platform ?? '—'})
                 </span>
-                <span>{stats?.system_health?.cpu ?? 0}%</span>
+                <span>{Math.round(stats?.system?.cpu ?? 0)}%</span>
               </div>
-              <Progress value={stats?.system_health?.cpu ?? 0} />
+              <Progress value={stats?.system?.cpu ?? 0} />
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
@@ -89,19 +84,9 @@ export default function AdminDashboard() {
                   <Zap className="h-4 w-4" />
                   Memory
                 </span>
-                <span>{stats?.system_health?.memory ?? 0}%</span>
+                <span>{Math.round(stats?.system?.memory ?? 0)}%</span>
               </div>
-              <Progress value={stats?.system_health?.memory ?? 0} />
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="flex items-center gap-2">
-                  <HardDrive className="h-4 w-4" />
-                  Disk
-                </span>
-                <span>{stats?.system_health?.disk ?? 0}%</span>
-              </div>
-              <Progress value={stats?.system_health?.disk ?? 0} />
+              <Progress value={stats?.system?.memory ?? 0} />
             </div>
           </CardContent>
         </Card>

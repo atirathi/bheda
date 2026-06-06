@@ -1,4 +1,4 @@
-import express, { Request, Response } from "express";
+import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
@@ -10,12 +10,21 @@ const app = express();
 const PORT = parseInt(process.env.PORT || "3004", 10);
 const REDIS_URL = process.env.REDIS_URL || "redis://localhost:6379";
 const BACKEND_URL = process.env.BACKEND_URL || "http://backend:8000";
-const API_KEY = process.env.API_KEY || "bheda-internal-api-key-2026";
+const API_KEY = process.env.API_KEY;
+if (!API_KEY) {
+  // Fail fast — no hardcoded default. Same posture as vuln-app.
+  throw new Error("API_KEY env var is required. Refusing to start with insecure default.");
+}
+// Image allowlist: challenge_id -> image@digest
+// Populated by the seed/scheduler pipeline. Hardcoded fallback for the lab image.
+const IMAGE_ALLOWLIST: Record<string, string> = {
+  "default": process.env.DEFAULT_CHALLENGE_IMAGE || "bheda-challenge-base:latest",
+};
 
 app.use(helmet());
-app.use(cors());
+app.use(cors({ origin: false }));   // CORS handled by traefik/nginx
 app.use(morgan("short"));
-app.use(express.json());
+app.use(express.json({ limit: "64kb" }));
 
 const redis = new Redis(REDIS_URL);
 const docker = new Docker({ socketPath: "/var/run/docker.sock" });
@@ -23,6 +32,25 @@ const docker = new Docker({ socketPath: "/var/run/docker.sock" });
 const CONTAINER_PREFIX = "bheda-ctf-";
 const INSTANCE_MAP_KEY = "ctf:instance-map";
 const NETWORK_NAME = "bheda_net";
+
+// ─── Auth: require X-API-Key + admin claim ───
+function requireAdmin(req: Request, res: Response, next: NextFunction) {
+  const key = req.header("x-api-key");
+  if (!key || key !== API_KEY) {
+    return res.status(401).json({ error: "unauthorized" });
+  }
+  // The API key holder is, by construction, the backend service. For stronger
+  // guarantees, the backend should also forward a signed JWT in `X-User-Token`.
+  next();
+}
+
+// ─── Replay protection via single-use nonces ───
+async function consumeNonce(nonce: string, ttlSeconds = 60): Promise<boolean> {
+  if (!nonce || typeof nonce !== "string" || nonce.length > 128) return false;
+  // SETNX with expiry; returns "OK" on first writer, null on duplicate.
+  const r = await redis.set(`ctf:nonce:${nonce}`, "1", "EX", ttlSeconds, "NX");
+  return r === "OK";
+}
 
 // ─── Health ───
 app.get("/health", async (_req: Request, res: Response) => {
@@ -35,12 +63,18 @@ app.get("/health", async (_req: Request, res: Response) => {
 });
 
 // ─── Spawn per-team instance ───
-app.post("/api/ctf/spawn", async (req: Request, res: Response) => {
-  const { event_id, team_id, team_name, challenge_id } = req.body;
+app.post("/api/ctf/spawn", requireAdmin, async (req: Request, res: Response) => {
+  const { event_id, team_id, team_name, challenge_id, nonce } = req.body;
 
   if (!event_id || !team_id || !challenge_id) {
     return res.status(400).json({ error: "event_id, team_id, and challenge_id required" });
   }
+  if (!nonce || !(await consumeNonce(nonce))) {
+    return res.status(409).json({ error: "duplicate or missing nonce" });
+  }
+
+  // Resolve image: pin to digest when possible (image@sha256:...).
+  const image = IMAGE_ALLOWLIST[challenge_id] || IMAGE_ALLOWLIST["default"];
 
   try {
     const containerName = `${CONTAINER_PREFIX}${event_id.slice(0, 8)}-${team_id.slice(0, 8)}`;
@@ -59,7 +93,7 @@ app.post("/api/ctf/spawn", async (req: Request, res: Response) => {
 
     const container = await docker.createContainer({
       name: containerName,
-      Image: "bheda-challenge-base",
+      Image: image,
       Env: [
         `CHALLENGE_ID=${challenge_id}`,
         `TEAM_ID=${team_id}`,
@@ -72,8 +106,15 @@ app.post("/api/ctf/spawn", async (req: Request, res: Response) => {
         NetworkMode: NETWORK_NAME,
         Memory: 256 * 1024 * 1024,
         NanoCpus: 500000000,
+        PidsLimit: 64,
+        ReadonlyRootfs: true,
         AutoRemove: true,
         PortBindings: {},
+        CapDrop: ["ALL"],
+        SecurityOpt: ["no-new-privileges:true"],
+        Ulimits: [
+          { Name: "nofile", Soft: 1024, Hard: 2048 },
+        ],
       },
       Labels: {
         "bheda.managed": "true",
@@ -99,7 +140,7 @@ app.post("/api/ctf/spawn", async (req: Request, res: Response) => {
     try {
       await fetch(`${BACKEND_URL}/api/internal/instance/spawned`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-API-Key": API_KEY },
+        headers: { "Content-Type": "application/json", "X-API-Key": API_KEY! },
         body: JSON.stringify({ event_id, team_id, challenge_id, instance_id: instanceId, container_name: containerName }),
       });
     } catch {}
@@ -111,8 +152,12 @@ app.post("/api/ctf/spawn", async (req: Request, res: Response) => {
 });
 
 // ─── Teardown per-team instance ───
-app.post("/api/ctf/teardown", async (req: Request, res: Response) => {
-  const { event_id, team_id, challenge_id, instance_id } = req.body;
+app.post("/api/ctf/teardown", requireAdmin, async (req: Request, res: Response) => {
+  const { event_id, team_id, challenge_id, instance_id, nonce } = req.body;
+
+  if (!nonce || !(await consumeNonce(nonce))) {
+    return res.status(409).json({ error: "duplicate or missing nonce" });
+  }
 
   try {
     let instanceId = instance_id;
@@ -140,7 +185,7 @@ app.post("/api/ctf/teardown", async (req: Request, res: Response) => {
     try {
       await fetch(`${BACKEND_URL}/api/internal/instance/teardown`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-API-Key": API_KEY },
+        headers: { "Content-Type": "application/json", "X-API-Key": API_KEY! },
         body: JSON.stringify({ event_id, team_id, instance_id: instanceId }),
       });
     } catch {}
@@ -152,7 +197,7 @@ app.post("/api/ctf/teardown", async (req: Request, res: Response) => {
 });
 
 // ─── Healthcheck for spawned instances ───
-app.get("/api/ctf/instance/:instanceId/health", async (req: Request, res: Response) => {
+app.get("/api/ctf/instance/:instanceId/health", requireAdmin, async (req: Request, res: Response) => {
   const { instanceId } = req.params;
 
   try {
@@ -185,7 +230,7 @@ app.get("/api/ctf/instance/:instanceId/health", async (req: Request, res: Respon
 });
 
 // ─── List all running instances ───
-app.get("/api/ctf/instances", async (_req: Request, res: Response) => {
+app.get("/api/ctf/instances", requireAdmin, async (_req: Request, res: Response) => {
   try {
     const containers = await docker.listContainers({
       all: true,
@@ -212,7 +257,7 @@ app.get("/api/ctf/instances", async (_req: Request, res: Response) => {
 });
 
 // ─── Teardown all instances for an event ───
-app.post("/api/ctf/event/:eventId/teardown-all", async (req: Request, res: Response) => {
+app.post("/api/ctf/event/:eventId/teardown-all", requireAdmin, async (req: Request, res: Response) => {
   const { eventId } = req.params;
   let removed = 0;
 

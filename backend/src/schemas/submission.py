@@ -6,7 +6,9 @@ from pydantic import BaseModel, Field
 
 class SubmissionCreate(BaseModel):
     challenge_id: uuid.UUID
-    flag: str
+    # CTF flags are typically < 100 chars. Cap at 256 to keep the
+    # double-SHA256 on every submit fast and bounded.
+    flag: str = Field(..., min_length=1, max_length=256)
     team_id: uuid.UUID | None = None
 
 

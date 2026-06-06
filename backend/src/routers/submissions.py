@@ -94,7 +94,8 @@ async def submit_flag(
                     )
 
         flag_hash = await ChallengeService.hash_flag(body.flag)
-        correct = flag_hash == challenge.flag_hash
+        # Constant-time compare (prevents timing oracle on flag_hash).
+        correct = await ChallengeService.verify_flag(body.flag, challenge.flag_hash)
 
         submission = Submission(
             user_id=current_user.id,
@@ -113,9 +114,12 @@ async def submit_flag(
             leaderboard = await ScoringService.recalculate_leaderboard(str(event.id))
             await manager.broadcast({"type": "leaderboard_update", "data": leaderboard})
 
+        # Do NOT return the `correct` boolean — it acts as a brute-force oracle.
+        # Return only an opaque submission id; the client should refetch
+        # submission status (admin) or rely on leaderboard updates.
         return {
-            "correct": correct,
             "submission_id": str(submission.id),
+            "status": "accepted",
         }
 
 

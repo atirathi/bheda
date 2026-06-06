@@ -11,10 +11,12 @@ import { api } from '@/lib/api';
 interface ProfileData {
   id: string;
   name: string;
-  description?: string;
-  challenges_count: number;
+  // The backend serializes `description` as `null` when unset; the
+  // `ProfileCard` prop type uses `string | undefined`, so we normalise
+  // to `string | undefined` here to keep the components in sync.
+  description?: string | null;
+  is_default: boolean;
   created_at: string;
-  is_active?: boolean;
 }
 
 export default function AdminProfilesPage() {
@@ -25,8 +27,9 @@ export default function AdminProfilesPage() {
   const fetchProfiles = async () => {
     setIsLoading(true);
     try {
-      const data = await api.get<{ profiles: ProfileData[] }>('/admin/profiles');
-      setProfiles(data.profiles);
+      // Backend returns a bare list, not `{ profiles: [...] }`.
+      const data = await api.get<ProfileData[]>('/profiles');
+      setProfiles(data);
     } catch {
       // silently fail
     } finally {
@@ -38,9 +41,11 @@ export default function AdminProfilesPage() {
     fetchProfiles();
   }, []);
 
-  const handleLoad = async (id: string) => {
+  const handleApply = async (id: string) => {
+    // Backend uses POST /profiles/{id}/apply (not /load).
     try {
-      await api.post(`/admin/profiles/${id}/load`);
+      await api.post(`/profiles/${id}/apply`);
+      fetchProfiles();
     } catch {
       // silently fail
     }
@@ -48,7 +53,7 @@ export default function AdminProfilesPage() {
 
   const handleDelete = async (id: string) => {
     try {
-      await api.delete(`/admin/profiles/${id}`);
+      await api.delete(`/profiles/${id}`);
       setProfiles(profiles.filter((p) => p.id !== id));
     } catch {
       // silently fail
@@ -58,8 +63,10 @@ export default function AdminProfilesPage() {
   const handleSaveCurrent = async () => {
     if (!newName.trim()) return;
     try {
-      const created = await api.post<ProfileData>('/admin/profiles', {
+      // Backend now uses a JSON `ProfileCreate` body (Pydantic-validated).
+      const created = await api.post<ProfileData>(`/profiles`, {
         name: newName.trim(),
+        config: {},
       });
       setProfiles([...profiles, created]);
       setNewName('');
@@ -70,12 +77,13 @@ export default function AdminProfilesPage() {
 
   const handleExport = async (id: string) => {
     try {
-      const data = await api.get<unknown>(`/admin/profiles/${id}/export`);
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      // Backend returns `{ yaml: "..." }`; convert to a YAML file.
+      const data = await api.get<{ yaml: string }>(`/profiles/${id}/export`);
+      const blob = new Blob([data.yaml], { type: 'application/x-yaml' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `profile-${id}.json`;
+      a.download = `profile-${id}.yaml`;
       a.click();
       URL.revokeObjectURL(url);
     } catch {
@@ -142,8 +150,11 @@ export default function AdminProfilesPage() {
           {profiles.map((profile) => (
             <ProfileCard
               key={profile.id}
-              profile={profile}
-              onLoad={handleLoad}
+              profile={{
+                ...profile,
+                challenges_count: 0,
+              }}
+              onLoad={handleApply}
               onDelete={handleDelete}
               onExport={handleExport}
             />

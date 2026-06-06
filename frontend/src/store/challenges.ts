@@ -7,7 +7,12 @@ export interface Category {
   icon: string;
   color: string;
   description?: string;
+  // Backend `Category.enabled` and `Category.is_active` map 1:1, but the
+  // admin frontend historically used `is_active`.  Keep both so the UI
+  // works against either field name; `is_active` is the canonical one
+  // and the backend returns `enabled` as an alias.
   is_active: boolean;
+  enabled?: boolean;
   sort_order: number;
   challenge_count?: number;
 }

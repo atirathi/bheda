@@ -7,6 +7,7 @@ from src.database import async_session_factory
 from src.middleware.auth_middleware import get_current_user, require_admin
 from src.models.profile import Profile
 from src.models.user import User
+from src.schemas.profile import ProfileCreate
 from src.services.profile_service import ProfileService
 
 router = APIRouter(prefix="/api/v1/profiles", tags=["profiles"])
@@ -32,7 +33,11 @@ async def list_profiles(current_user: User = Depends(get_current_user)):
 
 
 @router.get("/current")
-async def get_current_profile():
+async def get_current_profile(current_user: User = Depends(get_current_user)):
+    # Previously unauthenticated — leaked the active profile's full
+    # `config` blob (which can include endpoint overrides, category
+    # toggles, and metadata for every challenge) to anyone on the
+    # internet.  Require auth.
     profile = await ProfileService.get_current_profile()
     if profile is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No current profile set")
@@ -47,13 +52,15 @@ async def get_current_profile():
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
 async def create_profile(
-    name: str,
-    description: str | None = None,
-    config: dict | None = None,
+    body: ProfileCreate,
     current_user: User = Depends(require_admin),
 ):
     try:
-        profile = await ProfileService.create_profile(name, description, config)
+        profile = await ProfileService.create_profile(
+            name=body.name,
+            description=body.description,
+            config=body.config,
+        )
         return {
             "id": str(profile.id),
             "name": profile.name,

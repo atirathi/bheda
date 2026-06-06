@@ -14,7 +14,10 @@ export function getClientIp(req: Request): string {
   return req.socket.remoteAddress || '127.0.0.1';
 }
 
-export function sanitizeHtml(input: string): string {
+// Escape < and > to neuter angle-bracket XSS. This is NOT a general HTML
+// sanitizer: it does not escape &, ", ', javascript: URIs, or attributes.
+// For user-controlled HTML, use DOMPurify with a strict allowlist instead.
+export function escapeAngleBrackets(input: string): string {
   return input.replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 

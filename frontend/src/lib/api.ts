@@ -1,4 +1,7 @@
-const API_BASE = '/api';
+// Backend mounts every router at /api/v1/* (see backend/src/main.py).
+// Each store passes paths WITHOUT the /api/v1 prefix (e.g. "/auth/login"),
+// and this base is prepended.
+const API_BASE = '/api/v1';
 
 interface RequestOptions extends RequestInit {
   params?: Record<string, string>;

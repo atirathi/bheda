@@ -12,6 +12,32 @@ from src.models.user import User
 router = APIRouter(prefix="/api/v1/teams", tags=["teams"])
 
 
+def _serialize_team(team, *, include_invite: bool = False) -> dict:
+    """Serialize a Team row.  `invite_code` is only included when the
+    caller is a member of the team (or the owner); never expose it in
+    public listings — that's a free pass to join any team."""
+    out = {
+        "id": str(team.id),
+        "name": team.name,
+        "owner_id": str(team.owner_id),
+        "member_count": len(team.members) if team.members else 0,
+        "created_at": team.created_at.isoformat(),
+    }
+    if include_invite:
+        out["invite_code"] = team.invite_code
+    return out
+
+
+async def _user_is_member(session, team_id, user_id) -> bool:
+    from sqlalchemy import and_
+    result = await session.execute(
+        select(TeamMember).where(
+            and_(TeamMember.team_id == team_id, TeamMember.user_id == user_id)
+        )
+    )
+    return result.scalar_one_or_none() is not None
+
+
 @router.get("/", response_model=list[dict])
 async def list_teams(current_user: User = Depends(get_current_user)):
     async with async_session_factory() as session:
@@ -22,7 +48,6 @@ async def list_teams(current_user: User = Depends(get_current_user)):
                 "id": str(t.id),
                 "name": t.name,
                 "owner_id": str(t.owner_id),
-                "invite_code": t.invite_code,
                 "member_count": len(t.members) if t.members else 0,
                 "created_at": t.created_at.isoformat(),
             }
@@ -60,14 +85,12 @@ async def get_team(team_id: uuid.UUID, current_user: User = Depends(get_current_
         team = result.scalar_one_or_none()
         if team is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
-        return {
-            "id": str(team.id),
-            "name": team.name,
-            "owner_id": str(team.owner_id),
-            "invite_code": team.invite_code,
-            "member_count": len(team.members) if team.members else 0,
-            "created_at": team.created_at.isoformat(),
-        }
+        # Only the owner or a member sees the invite code.
+        is_member = (
+            team.owner_id == current_user.id
+            or await _user_is_member(session, team.id, current_user.id)
+        )
+        return _serialize_team(team, include_invite=is_member)
 
 
 @router.post("/{team_id}/join")

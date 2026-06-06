@@ -24,11 +24,17 @@ async def register(body: UserCreate):
 
 @router.post("/login")
 async def login(body: UserLogin):
-    user = await AuthService.authenticate(username=body.username, password=body.password)
+    # Resolve the login field. The schema guarantees at least one is set.
+    try:
+        login_id = body.resolved_login()
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    user = await AuthService.authenticate(login=login_id, password=body.password, mfa_code=body.mfa_code)
     if user is None:
+        # Generic message — don't reveal whether the account exists.
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     token = AuthService.create_token(user)
-    return {"access_token": token, "token_type": "bearer", "user": {"id": str(user.id), "username": user.username, "role": user.role}}
+    return {"access_token": token, "token_type": "bearer", "user": {"id": str(user.id), "username": user.username, "email": user.email, "role": user.role}}
 
 
 @router.get("/me", response_model=UserRead)

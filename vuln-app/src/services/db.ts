@@ -1,12 +1,20 @@
 import { Pool } from 'pg';
 import { MongoClient } from 'mongodb';
 
+function requireEnv(name: string): string {
+  const v = process.env[name];
+  if (!v) {
+    throw new Error(`Required env var ${name} is not set. Refusing to start with insecure default.`);
+  }
+  return v;
+}
+
 const pgPool = new Pool({
-  host: process.env.PG_HOST || 'localhost',
+  host: process.env.PG_HOST || 'postgres',
   port: parseInt(process.env.PG_PORT || '5432'),
   database: process.env.PG_DB || 'bheda',
   user: process.env.PG_USER || 'bheda',
-  password: process.env.PG_PASS || 'bheda_secret',
+  password: requireEnv('PG_PASS'),
   max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
@@ -17,7 +25,8 @@ let mongoDb: any = null;
 
 export async function getMongoDb() {
   if (mongoDb) return mongoDb;
-  mongoClient = new MongoClient(process.env.MONGO_URI || 'mongodb://localhost:27017/bheda');
+  const uri = process.env.MONGO_URI || 'mongodb://mongo:27017/bheda';
+  mongoClient = new MongoClient(uri);
   await mongoClient.connect();
   mongoDb = mongoClient.db('bheda');
   return mongoDb;

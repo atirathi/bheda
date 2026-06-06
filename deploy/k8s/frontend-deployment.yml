@@ -40,11 +40,22 @@ spec:
       terminationGracePeriodSeconds: 30
       containers:
         - name: frontend
-          image: ghcr.io/atirathi/bheda/frontend:latest
-          imagePullPolicy: Always
+          image: ghcr.io/atirathi/bheda/frontend:1.0.0
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 3000
               protocol: TCP
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
           envFrom:
             - configMapRef:
                 name: frontend-config

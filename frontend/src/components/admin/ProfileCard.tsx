@@ -9,7 +9,7 @@ import { formatDate } from '@/lib/utils';
 interface Profile {
   id: string;
   name: string;
-  description?: string;
+  description?: string | null;
   challenges_count: number;
   created_at: string;
   is_active?: boolean;

@@ -20,6 +20,11 @@ async def schedule_challenge(
     end_at: datetime | None = None,
     current_user: User = Depends(require_admin),
 ):
+    if start_at and end_at and end_at <= start_at:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="end_at must be after start_at",
+        )
     async with async_session_factory() as session:
         result = await session.execute(select(Challenge).where(Challenge.id == challenge_id))
         challenge = result.scalar_one_or_none()

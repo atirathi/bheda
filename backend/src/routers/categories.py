@@ -7,8 +7,8 @@ from sqlalchemy.orm import selectinload
 from src.database import async_session_factory
 from src.middleware.auth_middleware import get_current_user, require_admin
 from src.models.category import Category
-from src.models.challenge import Challenge
 from src.models.user import User
+from src.schemas.category import CategoryCreate
 
 router = APIRouter(prefix="/api/v1/categories", tags=["categories"])
 
@@ -39,20 +39,14 @@ async def list_categories(current_user: User = Depends(get_current_user)):
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
 async def create_category(
-    name: str,
-    icon: str | None = None,
-    color: str | None = None,
-    sort_order: int = 0,
-    description: str | None = None,
+    body: CategoryCreate,
     current_user: User = Depends(require_admin),
 ):
     async with async_session_factory() as session:
-        existing = await session.execute(select(Category).where(Category.name == name))
+        existing = await session.execute(select(Category).where(Category.name == body.name))
         if existing.scalar_one_or_none():
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Category already exists")
-        category = Category(
-            name=name, icon=icon, color=color, sort_order=sort_order, description=description
-        )
+        category = Category(**body.model_dump())
         session.add(category)
         await session.commit()
         await session.refresh(category)

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { BookOpen, AlertTriangle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -27,8 +27,54 @@ interface ChallengePlayerProps {
   challenge: ChallengeData;
 }
 
+// Restrict target URLs to known challenge hosts so the iframe can't be
+// pointed at attacker-controlled endpoints.  Substring match is intentional
+// (a challenge can be served from /api, /vuln, /ctf, etc. under the same
+// parent host).  Path traversal & scheme smuggling are caught below.
+const ALLOWED_HOST_SUFFIXES = [
+  'bheda.ctf',
+  'bheda.local',
+  'localhost',
+  '127.0.0.1',
+  '::1',
+];
+
+function isAllowedUrl(raw: string): boolean {
+  if (!raw) return false;
+  let url: URL;
+  try {
+    url = new URL(raw, window.location.origin);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
+  const host = url.hostname.toLowerCase();
+  return ALLOWED_HOST_SUFFIXES.some(
+    (suffix) => host === suffix || host.endsWith(`.${suffix}`)
+  );
+}
+
 export function ChallengePlayer({ challenge }: ChallengePlayerProps) {
-  const [vulnUrl, setVulnUrl] = useState(challenge.vuln_endpoint ?? '');
+  const initial = challenge.vuln_endpoint ?? '';
+  const [vulnUrl, setVulnUrl] = useState(initial);
+  const [urlError, setUrlError] = useState<string | null>(
+    initial && !isAllowedUrl(initial) ? 'Configured endpoint is not in the allow-list.' : null
+  );
+
+  // Re-validate whenever the user edits the URL.
+  useEffect(() => {
+    if (!vulnUrl) {
+      setUrlError(null);
+      return;
+    }
+    if (!isAllowedUrl(vulnUrl)) {
+      setUrlError('URL must use http(s) and target a known challenge host.');
+    } else {
+      setUrlError(null);
+    }
+  }, [vulnUrl]);
+
+  const safeVulnUrl = useMemo(() => (urlError ? '' : vulnUrl), [vulnUrl, urlError]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
@@ -92,6 +138,9 @@ export function ChallengePlayer({ challenge }: ChallengePlayerProps) {
                   className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm"
                 />
               </div>
+              {urlError && (
+                <p className="mt-2 text-xs text-destructive">{urlError}</p>
+              )}
             </CardContent>
           </Card>
         )}
@@ -109,12 +158,18 @@ export function ChallengePlayer({ challenge }: ChallengePlayerProps) {
       </div>
 
       <div className="h-[calc(100vh-12rem)]">
-        {vulnUrl ? (
+        {safeVulnUrl ? (
           <iframe
-            src={vulnUrl}
+            src={safeVulnUrl}
             className="h-full w-full rounded-lg border"
             title="Vulnerable Application"
-            sandbox="allow-scripts allow-forms allow-same-origin"
+            // `allow-same-origin` deliberately OMITTED: without it the framed
+            // document cannot access its own origin (cookies, localStorage,
+            // parent DOM), which is exactly the XSS-to-parent pivot we want
+            // to block.  Scripts + forms remain allowed so challenges still
+            // work end-to-end.
+            sandbox="allow-scripts allow-forms allow-popups"
+            referrerPolicy="no-referrer"
           />
         ) : (
           <div className="flex h-full items-center justify-center rounded-lg border border-dashed">

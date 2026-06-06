@@ -1,4 +1,5 @@
 import hashlib
+import hmac
 import json
 from datetime import datetime, timezone
 
@@ -81,4 +82,7 @@ class ChallengeService:
 
     @staticmethod
     async def verify_flag(submitted_flag: str, stored_hash: str) -> bool:
-        return hashlib.sha256(submitted_flag.encode()).hexdigest() == stored_hash
+        # Constant-time compare to prevent timing oracles.
+        # hmac.compare_digest is also robust against length-based leaks.
+        submitted_hash = hashlib.sha256(submitted_flag.encode()).hexdigest()
+        return hmac.compare_digest(submitted_hash.encode(), stored_hash.encode())

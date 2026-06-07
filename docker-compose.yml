@@ -134,7 +134,10 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-https://bheda.ctf}
     volumes:
       - ./challenges:/app/challenges:ro
-    ports: ["8000:8000"]
+    # Loopback only — Traefik/WAF handle the public ingress.  Binding
+    # to 0.0.0.0 would expose the unauthenticated API to anyone with
+    # network access to the host, bypassing the WAF and rate limits.
+    ports: ["127.0.0.1:8000:8000"]
     healthcheck:
       <<: *healthcheck-defaults
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
@@ -154,7 +157,8 @@ services:
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
       NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-ws://localhost:8000/api/v1/ws}
-    ports: ["3000:3000"]
+    # Loopback only — Traefik/WAF handle the public ingress.
+    ports: ["127.0.0.1:3000:3000"]
     healthcheck:
       <<: *healthcheck-defaults
       test: ["CMD", "wget", "--spider", "http://localhost:3000"]

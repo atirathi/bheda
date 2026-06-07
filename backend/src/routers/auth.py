@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import IntegrityError
 
 from src.middleware.auth_middleware import get_current_user
 from src.models.user import User
@@ -20,6 +21,14 @@ async def register(body: UserCreate):
         return user
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except IntegrityError:
+        # Race: a concurrent register call committed first and our
+        # pre-check found no row.  The DB unique constraint is the
+        # only race-free backstop — surface it as a clean 409.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Username or email already taken",
+        )
 
 
 @router.post("/login")
@@ -34,7 +43,16 @@ async def login(body: UserLogin):
         # Generic message — don't reveal whether the account exists.
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     token = AuthService.create_token(user)
-    return {"access_token": token, "token_type": "bearer", "user": {"id": str(user.id), "username": user.username, "email": user.email, "role": user.role}}
+    # Field name compatibility: the frontend's `useAuthStore.login` reads
+    # `data.token` (not `data.access_token`).  We return BOTH names so
+    # any client of the API (current frontend, future mobile, or a
+    # curl-based admin) gets a predictable shape.
+    return {
+        "access_token": token,
+        "token": token,
+        "token_type": "bearer",
+        "user": {"id": str(user.id), "username": user.username, "email": user.email, "role": user.role},
+    }
 
 
 @router.get("/me", response_model=UserRead)

@@ -15,6 +15,7 @@ import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from src.database import async_session_factory
 from src.middleware.auth_middleware import get_current_user
@@ -91,7 +92,13 @@ async def get_ctf_team(current_user: User = Depends(get_current_user)):
                 {
                     "id": str(m.TeamMember.id),
                     "username": m.User.username,
-                    "email": m.User.email,
+                    # Deliberately omit `email` here.  The caller is a
+                    # member so they may already know the team's
+                    # invite_code, but broadcasting every teammate's
+                    # email widens the social-engineering surface
+                    # (password-reset attacks, phishing) — and the
+                    # frontend's `useCTFStore` only uses `username`
+                    # and `role` to render the roster.
                     "role": "leader" if m.TeamMember.role == "captain" else "member",
                     "joined_at": m.TeamMember.joined_at.isoformat(),
                 }
@@ -179,6 +186,9 @@ async def join_ctf_team(
     invite_code = (body or {}).get("invite_code", "").strip()
     if not invite_code or len(invite_code) > 64:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="invite_code is required (1-64 chars)")
+    # Same cap as the real `/teams/{id}/join` route.  Without this,
+    # a player could bypass the cap by switching routes.
+    MAX_TEAM_SIZE = 10
     async with async_session_factory() as session:
         team = (
             await session.execute(select(Team).where(Team.invite_code == invite_code))
@@ -193,8 +203,27 @@ async def join_ctf_team(
             )
         ).scalar_one_or_none():
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Already a member")
-        session.add(TeamMember(team_id=team.id, user_id=current_user.id, role="member"))
-        await session.commit()
+        # Team size cap.
+        from sqlalchemy import func as sa_func
+        member_count = (
+            await session.execute(
+                select(sa_func.count(TeamMember.id)).where(TeamMember.team_id == team.id)
+            )
+        ).scalar() or 0
+        if member_count >= MAX_TEAM_SIZE:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Team is full (max {MAX_TEAM_SIZE} members)",
+            )
+        try:
+            session.add(TeamMember(team_id=team.id, user_id=current_user.id, role="member"))
+            await session.commit()
+        except IntegrityError:
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Already a member",
+            )
         return {"id": str(team.id), "name": team.name, "invite_code": team.invite_code, "score": 0, "members": []}
 
 

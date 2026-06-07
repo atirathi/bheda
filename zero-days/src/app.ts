@@ -5,6 +5,7 @@ import morgan from "morgan";
 import jwt from "jsonwebtoken";
 import Redis from "ioredis";
 import rateLimit from "express-rate-limit";
+import { timingSafeEqual } from "crypto";
 
 const app = express();
 const PORT = parseInt(process.env.PORT || "3003", 10);
@@ -434,7 +435,15 @@ app.post("/zero-day/zd-008/exploit", async (req: Request, res: Response) => {
 // ─── Unlock endpoint (called by backend after prerequisites met) ───
 app.post("/zero-day/unlock", async (req: Request, res: Response) => {
   const { zdId, userId, token } = req.body;
-  if (token !== API_KEY) {
+  // Constant-time API-key compare.  A 32-char hex key with `===`
+  // would leak timing info on partial matches; timingSafeEqual
+  // makes the comparison take the same time regardless of where
+  // the strings differ.
+  if (
+    typeof token !== "string" ||
+    token.length !== (API_KEY as string).length ||
+    !timingSafeEqual(Buffer.from(token), Buffer.from(API_KEY as string))
+  ) {
     return res.status(401).json({ error: "Unauthorized" });
   }
   if (!zdId) {
@@ -446,7 +455,21 @@ app.post("/zero-day/unlock", async (req: Request, res: Response) => {
 });
 
 // ─── Get flag for a solved zero-day ───
+// Previously unauthenticated: any caller who knew the URL pattern
+// `/zero-day/flag/{id}` could read another team's solved flag,
+// completely bypassing the challenge.  Now requires the same
+// `X-API-Key` header used by the other internal services, AND
+// looks up the solving user from Redis to make the response
+// non-trivially replayable.
 app.get("/zero-day/flag/:zdId", async (req: Request, res: Response) => {
+  const provided = req.header("x-api-key");
+  if (
+    typeof provided !== "string" ||
+    provided.length !== (API_KEY as string).length ||
+    !timingSafeEqual(Buffer.from(provided), Buffer.from(API_KEY as string))
+  ) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
   const flag = await redis.get(`flag:${req.params.zdId}`);
   if (!flag) {
     return res.status(404).json({ error: "Flag not found. Solve the challenge first." });

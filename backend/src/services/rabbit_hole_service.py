@@ -25,7 +25,12 @@ class RabbitHoleService:
             "payload": payload,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
-        await redis_conn.lpush(key, str(entry))
+        # Use json.dumps, not str(entry).  `str(dict)` produces
+        # single-quoted Python repr ("{'a': 1}") which `json.loads`
+        # rejects — every "recent" trigger would then be silently
+        # dropped.  json.dumps round-trips cleanly.
+        entry_json = json.dumps(entry)
+        await redis_conn.lpush(key, entry_json)
         await redis_conn.ltrim(key, 0, 999)
         await redis_conn.expire(key, 86400)
         await redis_conn.incr("rabbithole:total_triggers")
@@ -39,7 +44,7 @@ class RabbitHoleService:
         await redis_conn.zremrangebyscore("rabbithole:timestamps", "-inf", cutoff)
         # Also append to a 30-day rolling `recent` sorted set so the admin
         # dashboard can show the last 50 triggers.
-        await redis_conn.zadd("rabbithole:recent", {str(entry): now_ts})
+        await redis_conn.zadd("rabbithole:recent", {entry_json: now_ts})
         await redis_conn.zremrangebyscore("rabbithole:recent", "-inf", cutoff)
 
     @staticmethod

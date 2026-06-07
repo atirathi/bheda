@@ -1,20 +1,14 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from sqlalchemy import select, func
-from sqlalchemy.orm import selectinload
+from sqlalchemy import select
 
 from src.database import async_session_factory
 from src.middleware.auth_middleware import get_current_user, require_admin
-from src.models.challenge import Challenge
-from src.models.event import CTFEvent, EventParticipant
 from src.models.submission import Submission
-from src.models.team import Team, TeamMember
 from src.models.user import User
 from src.schemas.submission import SubmissionCreate, SubmissionRead
-from src.services.challenge_service import ChallengeService
-from src.services.scoring_service import ScoringService
-from src.services.websocket_manager import manager
+from src.services.submission_service import SubmissionService
 
 router = APIRouter(prefix="/api/v1/submissions", tags=["submissions"])
 
@@ -25,109 +19,13 @@ async def submit_flag(
     request: Request,
     current_user: User = Depends(get_current_user),
 ):
-    async with async_session_factory() as session:
-        challenge_result = await session.execute(
-            select(Challenge)
-            .options(selectinload(Challenge.category))
-            .where(Challenge.id == body.challenge_id)
-        )
-        challenge = challenge_result.scalar_one_or_none()
-
-        if challenge is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Challenge not found")
-        if not challenge.enabled or not challenge.category.enabled:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Challenge not found or disabled")
-
-        team_id = body.team_id
-
-        if team_id:
-            team_result = await session.execute(select(Team).where(Team.id == team_id))
-            team = team_result.scalar_one_or_none()
-            if team is None:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
-            membership_result = await session.execute(
-                select(TeamMember).where(
-                    TeamMember.team_id == team_id, TeamMember.user_id == current_user.id
-                )
-            )
-            if not membership_result.scalar_one_or_none():
-                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You are not a member of this team")
-
-        active_event = await session.execute(
-            select(CTFEvent).where(CTFEvent.status == "active")
-        )
-        event = active_event.scalar_one_or_none()
-        if event and not team_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="A CTF event is active. Submissions must be made under a team.",
-            )
-
-        if challenge.max_attempts > 0 and team_id:
-            attempts_result = await session.execute(
-                select(func.count(Submission.id))
-                .where(
-                    Submission.challenge_id == challenge.id,
-                    Submission.team_id == team_id,
-                )
-            )
-            attempts = attempts_result.scalar() or 0
-            if attempts >= challenge.max_attempts:
-                raise HTTPException(
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail="Maximum attempts exceeded for this challenge",
-                )
-
-        if challenge.requires:
-            for req_id in challenge.requires:
-                req_result = await session.execute(
-                    select(Submission).where(
-                        Submission.challenge_id == req_id,
-                        Submission.team_id == team_id,
-                        Submission.correct.is_(True),
-                    )
-                )
-                if not req_result.scalar_one_or_none():
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f"Prerequisite challenge not solved: {req_id}",
-                    )
-
-        flag_hash = await ChallengeService.hash_flag(body.flag)
-        # Constant-time compare (prevents timing oracle on flag_hash).
-        correct = await ChallengeService.verify_flag(body.flag, challenge.flag_hash)
-
-        submission = Submission(
-            user_id=current_user.id,
-            team_id=team_id,
-            challenge_id=challenge.id,
-            flag_hash=flag_hash,
-            correct=correct,
-            ip_address=request.client.host if request.client else None,
-            user_agent=request.headers.get("user-agent"),
-        )
-        session.add(submission)
-        await session.commit()
-        await session.refresh(submission)
-
-        if correct and event:
-            leaderboard = await ScoringService.recalculate_leaderboard(str(event.id))
-            await manager.broadcast({"type": "leaderboard_update", "data": leaderboard})
-
-        # Include the `correct` boolean in the response because the
-        # CTF UX requires it (players need immediate feedback).  The
-        # brute-force risk is mitigated by:
-        #   1. `max_attempts` cap on each challenge (rejected above)
-        #   2. `hmac.compare_digest` on the flag hash
-        #   3. The rate-limit middleware in front of every router
-        # Without `max_attempts`, this would be a free oracle.  The
-        # admin can also call /submissions/?correct= to bypass the
-        # cap and run bulk checks; that route is admin-only.
-        return {
-            "submission_id": str(submission.id),
-            "status": "accepted" if not correct else "correct",
-            "correct": correct,
-        }
+    return await SubmissionService.submit(
+        current_user=current_user,
+        challenge_id=body.challenge_id,
+        flag=body.flag,
+        team_id=body.team_id,
+        request=request,
+    )
 
 
 @router.get("/", response_model=list[SubmissionRead])

@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, String, func
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, String, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -63,4 +63,12 @@ class TeamMember(Base):
             "role IN ('captain', 'member')",
             name="team_member_role_enum",
         ),
+        # One row per (team, user).  The application code does a
+        # pre-check, but two concurrent join requests for the same
+        # user can both pass that check (TOCTOU) and both insert.
+        # The unique constraint is the only race-free backstop —
+        # the second commit fails with IntegrityError, which the
+        # router surfaces as a 409.  Also makes membership queries
+        # index-only.
+        UniqueConstraint("team_id", "user_id", name="uq_team_members_team_user"),
     )

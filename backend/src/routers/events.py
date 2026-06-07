@@ -7,6 +7,7 @@ from sqlalchemy.orm import selectinload
 from src.database import async_session_factory
 from src.middleware.auth_middleware import get_current_user, require_admin
 from src.models.event import CTFEvent, EventParticipant
+from src.models.team import Team, TeamMember
 from src.models.user import User
 from src.schemas.event import EventCreate, EventRead
 from src.services.ctf_service import CTFService
@@ -135,6 +136,30 @@ async def register_for_event(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
         if event.status != "pending":
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Event is not open for registration")
+        # Authorize: caller must be a member (or owner) of the team
+        # they claim to register.  Previously any authenticated user
+        # could register any team — a sabotage vector (register a
+        # rival team with the wrong config, lock them out, etc.).
+        team_result = await session.execute(
+            select(Team).where(Team.id == team_id)
+        )
+        team = team_result.scalar_one_or_none()
+        if team is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
+        is_owner = team.owner_id == current_user.id
+        is_member = (
+            await session.execute(
+                select(TeamMember).where(
+                    TeamMember.team_id == team_id,
+                    TeamMember.user_id == current_user.id,
+                )
+            )
+        ).scalar_one_or_none() is not None
+        if not (is_owner or is_member or current_user.role == "admin"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You must be a member of this team to register it",
+            )
         existing = await session.execute(
             select(EventParticipant).where(
                 EventParticipant.event_id == event_id,

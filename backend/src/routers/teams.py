@@ -3,6 +3,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from src.database import async_session_factory
 from src.middleware.auth_middleware import get_current_user
@@ -128,7 +129,17 @@ async def join_team(team_id: uuid.UUID, invite_code: str, current_user: User = D
             )
         member = TeamMember(team_id=team.id, user_id=current_user.id, role="member")
         session.add(member)
-        await session.commit()
+        try:
+            await session.commit()
+        except IntegrityError:
+            # Concurrent join request beat us to the unique-constraint
+            # check.  The pre-check above was best-effort; the DB
+            # constraint is the only race-free backstop.
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Already a member",
+            )
         return {"detail": "Joined team successfully"}
 
 

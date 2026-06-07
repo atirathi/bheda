@@ -16,10 +16,15 @@ if (!API_KEY) {
   throw new Error("API_KEY env var is required. Refusing to start with insecure default.");
 }
 // Image allowlist: challenge_id -> image@digest
-// Populated by the seed/scheduler pipeline. Hardcoded fallback for the lab image.
-const IMAGE_ALLOWLIST: Record<string, string> = {
-  "default": process.env.DEFAULT_CHALLENGE_IMAGE || "bheda-challenge-base:latest",
-};
+// Populated by the seed/scheduler pipeline. The default image MUST be
+// set via DEFAULT_CHALLENGE_IMAGE — refusing to start without an
+// explicit image prevents a forgotten :latest tag from being
+// pulled (which would defeat the hardened compose policy).
+const IMAGE_ALLOWLIST: Record<string, string> = {};
+const DEFAULT_CHALLENGE_IMAGE = process.env.DEFAULT_CHALLENGE_IMAGE;
+if (DEFAULT_CHALLENGE_IMAGE) {
+  IMAGE_ALLOWLIST["default"] = DEFAULT_CHALLENGE_IMAGE;
+}
 
 app.use(helmet());
 app.use(cors({ origin: false }));   // CORS handled by traefik/nginx
@@ -53,10 +58,14 @@ async function consumeNonce(nonce: string, ttlSeconds = 60): Promise<boolean> {
 }
 
 // ─── Health ───
+// Health is open so the orchestrator's compose `healthcheck` and
+// Traefik's load-balancer probe can hit it.  We deliberately do NOT
+// leak the docker daemon info (swarm state, plugin list, etc.) —
+// only a binary availability flag.
 app.get("/health", async (_req: Request, res: Response) => {
   try {
-    const info = await docker.info();
-    res.json({ status: "healthy", docker_available: true, swarm: info.Swarm?.LocalNodeState || "inactive" });
+    await docker.ping();
+    res.json({ status: "healthy", docker_available: true });
   } catch {
     res.json({ status: "degraded", docker_available: false });
   }
@@ -74,7 +83,19 @@ app.post("/api/ctf/spawn", requireAdmin, async (req: Request, res: Response) => 
   }
 
   // Resolve image: pin to digest when possible (image@sha256:...).
+  // Refuse to spawn with `:latest` or with no image configured —
+  // either one defeats the hardened compose policy.
   const image = IMAGE_ALLOWLIST[challenge_id] || IMAGE_ALLOWLIST["default"];
+  if (!image) {
+    return res.status(503).json({
+      error: "no image configured for challenge_id or DEFAULT_CHALLENGE_IMAGE",
+    });
+  }
+  if (image.endsWith(":latest")) {
+    return res.status(503).json({
+      error: "refusing to spawn an image tagged :latest",
+    });
+  }
 
   try {
     const containerName = `${CONTAINER_PREFIX}${event_id.slice(0, 8)}-${team_id.slice(0, 8)}`;

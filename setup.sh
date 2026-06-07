@@ -239,6 +239,13 @@ setup_env() {
   if [ ! -f .env ]; then
     cp .env.example .env
     log ".env created from .env.example"
+    # Auto-generate real secrets so the backend's fail-fast check
+    # (`assert_safe()`) doesn't refuse to start.  Operators are
+    # expected to rotate these before any external deployment.
+    if [ -f scripts/generate-secrets.sh ]; then
+      log "Generating random secrets for local development..."
+      bash scripts/generate-secrets.sh || warn "Secret generation had issues (non-fatal)."
+    fi
   else
     warn ".env already exists — skipping."
   fi

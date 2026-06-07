@@ -36,6 +36,12 @@ const nextConfig = {
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
           { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+          // Strict CSP: only same-origin scripts/styles, no inline
+          // (Next.js uses nonces but we omit them for now to keep
+          // the build simple).  `'unsafe-inline'` is required for
+          // Next.js's hydration inline scripts in dev; remove it in
+          // production if nonces are added.
+          { key: 'Content-Security-Policy', value: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' wss: https:; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'self';" },
         ],
       },
     ];

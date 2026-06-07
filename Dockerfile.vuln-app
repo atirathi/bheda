@@ -1,5 +1,8 @@
 FROM node:22-slim
 
+# Create a non-root user for runtime.
+RUN groupadd -r -g 1000 bheda && useradd -r -u 1000 -g bheda -m -d /app bheda
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
@@ -9,7 +12,7 @@ WORKDIR /app
 COPY vuln-app/package.json vuln-app/tsconfig.json ./
 RUN npm install --omit=dev && npm cache clean --force
 
-COPY vuln-app/src ./src
+COPY --chown=bheda:bheda vuln-app/src ./src
 RUN npm run build
 
 EXPOSE 3000
@@ -19,12 +22,12 @@ ENV PG_HOST=postgres
 ENV PG_PORT=5432
 ENV PG_DB=bheda
 ENV PG_USER=bheda
-ENV PG_PASS=""
+# PG_PASS and FLAG_SECRET MUST be provided at runtime — the
+# fail-fast asserts in db.ts and flag.ts refuse to start without them.
 ENV MONGO_URI=mongodb://mongo:27017/bheda
 ENV REDIS_URL=redis://redis:6379
 ENV BACKEND_URL=http://backend:8000
 
-# Secrets MUST be provided at runtime (docker-compose, k8s, or runtime env).
-# Never bake FLAG_SECRET or any credential into the image.
+USER bheda
 
 CMD ["node", "dist/app.js"]

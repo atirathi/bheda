@@ -2,8 +2,12 @@ import Redis from "ioredis";
 import axios from "axios";
 
 const REDIS_URL = process.env.REDIS_URL || "redis://localhost:6379";
-const BACKEND_URL = process.env.BACKEND_URL || "http://backend:8000";
-const API_KEY = process.env.API_KEY || "bheda-internal-api-key-2026";
+const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
+// Fail fast if API_KEY is missing.
+const API_KEY = process.env.API_KEY;
+if (!API_KEY) {
+  throw new Error("API_KEY env var is required. Refusing to start without it.");
+}
 
 const redis = new Redis(REDIS_URL);
 

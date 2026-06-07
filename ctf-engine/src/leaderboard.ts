@@ -10,21 +10,29 @@ import axios from "axios";
 
 const PORT = parseInt(process.env.PORT || "3005", 10);
 const REDIS_URL = process.env.REDIS_URL || "redis://localhost:6379";
-const BACKEND_URL = process.env.BACKEND_URL || "http://backend:8000";
-const API_KEY = process.env.API_KEY || "bheda-internal-api-key-2026";
+const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
+// Fail fast if API_KEY is missing — a hardcoded fallback would let
+// any caller impersonate the backend over the internal API.
+const API_KEY = process.env.API_KEY;
+if (!API_KEY) {
+  throw new Error("API_KEY env var is required. Refusing to start without it.");
+}
 
 const redis = new Redis(REDIS_URL);
 const pubSub = new Redis(REDIS_URL);
 
 const app = express();
 app.use(helmet());
-app.use(cors());
+// CORS is handled by the reverse proxy (Traefik/nginx).  The
+// leaderboard service is internal-only, so the default open CORS
+// was a wide-open relay for any browser on the internet.
+app.use(cors({ origin: false, methods: ["GET", "POST"] }));
 app.use(morgan("short"));
-app.use(express.json());
+app.use(express.json({ limit: "64kb" }));
 
 const httpServer = createServer(app);
 const io = new SocketIOServer(httpServer, {
-  cors: { origin: "*", methods: ["GET", "POST"] },
+  cors: { origin: false, methods: ["GET", "POST"] },
 });
 
 // ─── Connect to backend WebSocket for events ───
@@ -121,7 +129,8 @@ app.get("/api/leaderboard/:eventId/stream", (req: Request, res: Response) => {
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache",
     "Connection": "keep-alive",
-    "Access-Control-Allow-Origin": "*",
+    // CORS handled by the upstream proxy.  Echoing "*" would let any
+    // browser subscribe to live scoring events.
   });
 
   const sendEvent = (data: any) => {

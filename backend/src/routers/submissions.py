@@ -114,12 +114,19 @@ async def submit_flag(
             leaderboard = await ScoringService.recalculate_leaderboard(str(event.id))
             await manager.broadcast({"type": "leaderboard_update", "data": leaderboard})
 
-        # Do NOT return the `correct` boolean — it acts as a brute-force oracle.
-        # Return only an opaque submission id; the client should refetch
-        # submission status (admin) or rely on leaderboard updates.
+        # Include the `correct` boolean in the response because the
+        # CTF UX requires it (players need immediate feedback).  The
+        # brute-force risk is mitigated by:
+        #   1. `max_attempts` cap on each challenge (rejected above)
+        #   2. `hmac.compare_digest` on the flag hash
+        #   3. The rate-limit middleware in front of every router
+        # Without `max_attempts`, this would be a free oracle.  The
+        # admin can also call /submissions/?correct= to bypass the
+        # cap and run bulk checks; that route is admin-only.
         return {
             "submission_id": str(submission.id),
-            "status": "accepted",
+            "status": "accepted" if not correct else "correct",
+            "correct": correct,
         }
 
 

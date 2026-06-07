@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, func
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -24,6 +24,17 @@ class Team(TimestampMixin, Base):
     owner = relationship("User", foreign_keys=[owner_id], lazy="selectin")
     members = relationship("TeamMember", back_populates="team", lazy="selectin", cascade="all, delete-orphan")
 
+    # Reject `avatar_url` schemes other than http(s) at the DB level
+    # so a stray `javascript:`, `data:`, or `vbscript:` URI can't
+    # sneak past application-level validation.  Application-level
+    # validation is still the primary defense — this is a backstop.
+    __table_args__ = (
+        CheckConstraint(
+            "avatar_url IS NULL OR avatar_url ~ '^https?://'",
+            name="team_avatar_url_scheme",
+        ),
+    )
+
 
 class TeamMember(Base):
     __tablename__ = "team_members"
@@ -44,3 +55,12 @@ class TeamMember(Base):
 
     team = relationship("Team", back_populates="members")
     user = relationship("User", back_populates="teams")
+
+    __table_args__ = (
+        # `role` is constrained to "captain" or "member" so a stray
+        # `UserUpdate.role` typo can't elevate someone to "superadmin".
+        CheckConstraint(
+            "role IN ('captain', 'member')",
+            name="team_member_role_enum",
+        ),
+    )

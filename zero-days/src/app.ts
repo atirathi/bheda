@@ -11,7 +11,12 @@ const PORT = parseInt(process.env.PORT || "3003", 10);
 const VULN_APP_URL = process.env.VULN_APP_URL || "http://vuln-app:3001";
 const BACKEND_URL = process.env.BACKEND_URL || "http://backend:8000";
 const REDIS_URL = process.env.REDIS_URL || "redis://localhost:6379";
-const API_KEY = process.env.API_KEY || "bheda-internal-api-key-2026";
+// Fail fast on missing API_KEY.  A hardcoded fallback would let any
+// caller unlock zero-day challenges without a real shared secret.
+const API_KEY = process.env.API_KEY;
+if (!API_KEY) {
+  throw new Error("API_KEY env var is required. Refusing to start without it.");
+}
 
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors());
@@ -44,7 +49,7 @@ app.get("/health", (_req: Request, res: Response) => {
 async function ensureUnlocked(zdId: string, userId?: string): Promise<boolean> {
   try {
     const resp = await fetch(`${BACKEND_URL}/api/internal/zero-day/status?zd_id=${zdId}&user_id=${userId || "anonymous"}`, {
-      headers: { "X-API-Key": API_KEY },
+      headers: { "X-API-Key": API_KEY as string },
     });
     if (resp.ok) {
       const data: any = await resp.json();

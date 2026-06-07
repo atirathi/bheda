@@ -1,6 +1,7 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
@@ -10,6 +11,14 @@ from src.models.category import Category
 from src.models.challenge import Challenge
 from src.models.user import User
 from src.schemas.challenge import ChallengeAdminRead, ChallengeCreate, ChallengeRead, ChallengeToggle
+
+
+class ChallengeSubmitAlias(BaseModel):
+    # Body schema for the `/challenges/submit` alias — same shape the
+    # frontend's `FlagSubmit` component sends.
+    challenge_id: uuid.UUID
+    flag: str = Field(..., min_length=1, max_length=256)
+    team_id: uuid.UUID | None = None
 
 router = APIRouter(prefix="/api/v1/challenges", tags=["challenges"])
 
@@ -176,3 +185,96 @@ async def delete_challenge(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Challenge not found")
         await session.delete(challenge)
         await session.commit()
+
+
+# ─── /challenges/submit alias ───
+# The frontend's `FlagSubmit` component (and `useChallengesStore.submitFlag`)
+# historically calls `POST /challenges/submit` with `{ challenge_id, flag }`.
+# The canonical route lives at `POST /submissions/`; this alias forwards
+# the same body, picks up the same rate-limit + brute-force caps, and
+# returns the same response.  Keep it thin — no logic, no state.
+@router.post("/submit", status_code=status.HTTP_201_CREATED)
+async def submit_flag_alias(
+    body: "ChallengeSubmitAlias",
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
+    from src.models.event import CTFEvent
+    from src.models.team import Team, TeamMember
+    from src.models.submission import Submission
+    from src.services.challenge_service import ChallengeService
+    from src.services.scoring_service import ScoringService
+    from src.services.websocket_manager import manager
+
+    async with async_session_factory() as session:
+        chal = (
+            await session.execute(
+                select(Challenge)
+                .options(selectinload(Challenge.category))
+                .where(Challenge.id == body.challenge_id)
+            )
+        ).scalar_one_or_none()
+        if chal is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Challenge not found")
+        if not chal.enabled or not chal.category.enabled:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Challenge not found or disabled")
+
+        team_id = body.team_id
+        if team_id:
+            team = (await session.execute(select(Team).where(Team.id == team_id))).scalar_one_or_none()
+            if team is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
+            if not (await session.execute(
+                select(TeamMember).where(
+                    TeamMember.team_id == team_id, TeamMember.user_id == current_user.id
+                )
+            )).scalar_one_or_none():
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You are not a member of this team")
+
+        active_event = (
+            await session.execute(select(CTFEvent).where(CTFEvent.status == "active"))
+        ).scalar_one_or_none()
+        if active_event and not team_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A CTF event is active. Submissions must be made under a team.",
+            )
+
+        if chal.max_attempts > 0 and team_id:
+            attempts = (
+                await session.execute(
+                    select(func.count(Submission.id)).where(
+                        Submission.challenge_id == chal.id, Submission.team_id == team_id
+                    )
+                )
+            ).scalar() or 0
+            if attempts >= chal.max_attempts:
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Maximum attempts exceeded for this challenge",
+                )
+
+        flag_hash = await ChallengeService.hash_flag(body.flag)
+        correct = await ChallengeService.verify_flag(body.flag, chal.flag_hash)
+        submission = Submission(
+            user_id=current_user.id,
+            team_id=team_id,
+            challenge_id=chal.id,
+            flag_hash=flag_hash,
+            correct=correct,
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+        )
+        session.add(submission)
+        await session.commit()
+        await session.refresh(submission)
+
+        if correct and active_event:
+            leaderboard = await ScoringService.recalculate_leaderboard(str(active_event.id))
+            await manager.broadcast({"type": "leaderboard_update", "data": leaderboard})
+
+    return {
+        "submission_id": str(submission.id),
+        "status": "correct" if correct else "accepted",
+        "correct": correct,
+    }

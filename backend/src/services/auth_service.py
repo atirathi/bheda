@@ -40,9 +40,17 @@ class AuthService:
     async def authenticate(login: str, password: str, mfa_code: str | None = None) -> User | None:
         # `login` may be either email or username. We always do a bcrypt
         # compare against a (possibly-none) user to keep timing constant.
+        # Lowercase the lookup so `User@x.com` and `user@x.com` resolve
+        # to the same account (Pydantic normalizes the request, but the
+        # DB column itself is whatever the operator wrote at insert time).
+        login_key = login.lower() if "@" in login else login
         async with async_session_factory() as session:
             result = await session.execute(
-                select(User).where((User.username == login) | (User.email == login))
+                select(User).where(
+                    (User.username == login_key)
+                    | (User.email == login_key)
+                    | (User.email == login)  # tolerate unnormalized legacy rows
+                )
             )
             user = result.scalar_one_or_none()
             if user is None:
@@ -53,7 +61,12 @@ class AuthService:
                 return None
             if not bcrypt.checkpw(password.encode(), user.password_hash.encode()):
                 return None
-            # MFA is a stub for now — when implemented, verify TOTP here.
+            # MFA is a stub for now.  We deliberately require `mfa_code`
+            # to be the right SHAPE (6-10 digits) when present so a
+            # garbage value doesn't reach an unused `_ = mfa_code` and
+            # silently pass.  When TOTP is implemented, verify here.
+            if mfa_code is not None and not mfa_code.isdigit():
+                return None
             _ = mfa_code  # currently unused
             user.last_login = datetime.now(timezone.utc)
             await session.commit()

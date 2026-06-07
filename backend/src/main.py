@@ -14,12 +14,15 @@ from src.routers import (
     auth_router,
     categories_router,
     challenges_router,
+    ctf_compat_router,
     events_router,
+    internal_router,
     leaderboard_router,
     monitor_router,
     profiles_router,
     rabbit_holes_router,
     schedule_router,
+    stats_router,
     submissions_router,
     teams_router,
     users_router,
@@ -33,6 +36,8 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Fail fast on placeholder / weak secrets before we accept any traffic.
+    settings.assert_safe()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     from src.services.seed_service import seed_challenges
@@ -48,21 +53,33 @@ async def lifespan(app: FastAPI):
     await engine.dispose()
 
 
+# Docs / OpenAPI exposure is gated by `DOCS_ENABLED` (default: false in
+# config.py).  When disabled, FastAPI returns 404 for /docs, /redoc, and
+# /openapi.json — the API surface is no longer public-knowledge.
 app = FastAPI(
     title="Bheda Vulnerability Lab Platform",
     version="1.0.0",
     lifespan=lifespan,
-    docs_url="/docs",
-    redoc_url="/redoc",
-    openapi_url="/openapi.json",
+    docs_url="/docs" if settings.docs_enabled else None,
+    redoc_url="/redoc" if settings.docs_enabled else None,
+    openapi_url="/openapi.json" if settings.docs_enabled else None,
 )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins.split(",") if settings.cors_origins != "*" else ["*"],
+    # `cors_origins` is a comma-separated list.  We refuse to enable
+    # `*` because that combined with `allow_credentials=True` is
+    # both an invalid HTTP/1.1 CORS configuration AND a CSRF
+    # amplifier — browsers reject the response, so we'd be
+    # operating in a "broken-but-leaky" middle state.
+    allow_origins=[o.strip() for o in settings.cors_origins.split(",") if o.strip() and o.strip() != "*"],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    # Restrict to methods we actually use.  Wildcard is fine here,
+    # but limiting reduces the OPTIONS surface a probe can map.
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Requested-With", "X-API-Key"],
+    expose_headers=["X-RateLimit-Limit", "X-RateLimit-Remaining", "Retry-After"],
+    max_age=86400,
 )
 
 app.middleware("http")(create_auth_middleware())
@@ -82,11 +99,45 @@ app.include_router(profiles_router)
 app.include_router(schedule_router)
 app.include_router(rabbit_holes_router)
 app.include_router(monitor_router)
+app.include_router(stats_router)
+app.include_router(ctf_compat_router)
+app.include_router(internal_router)
 
 
 @app.get("/api/v1/health")
 async def health_check():
-    return {"status": "healthy", "mode": settings.mode}
+    # Useful for k8s liveness/readiness.  We do a cheap round-trip to
+    # Postgres and Redis; a 200 here means the app can actually serve
+    # traffic.  Failures return 503 with the same body shape so a
+    # probe can be parsed uniformly.
+    from fastapi.responses import JSONResponse
+
+    from src.database import get_redis
+    from sqlalchemy import text
+
+    db_ok = False
+    redis_ok = False
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+        db_ok = True
+    except Exception:
+        pass
+    try:
+        r = await get_redis()
+        redis_ok = await r.ping()
+    except Exception:
+        pass
+
+    body = {
+        "status": "healthy" if (db_ok and redis_ok) else "degraded",
+        "mode": settings.mode,
+        "dependencies": {"database": db_ok, "redis": redis_ok},
+    }
+    return JSONResponse(
+        status_code=200 if (db_ok and redis_ok) else 503,
+        content=body,
+    )
 
 
 @app.websocket("/api/v1/ws")

@@ -186,10 +186,14 @@ http:
         stsPreload: true
 
     # ─── CORS ───
+    # The allowlist is read from the `CORS_ALLOWED_ORIGINS` env var
+    # (comma-separated) so the same compose file works for staging
+    # and prod.  Default to the production host; `*` is rejected
+    # because it doesn't compose safely with credentialed requests.
     cors-headers:
       headers:
         accessControlAllowOriginList:
-          - "*"
+          - "${CORS_ALLOWED_ORIGINS:-https://bheda.ctf}"
         accessControlAllowMethods:
           - GET
           - POST

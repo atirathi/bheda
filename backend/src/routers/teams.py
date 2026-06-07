@@ -95,6 +95,10 @@ async def get_team(team_id: uuid.UUID, current_user: User = Depends(get_current_
 
 @router.post("/{team_id}/join")
 async def join_team(team_id: uuid.UUID, invite_code: str, current_user: User = Depends(get_current_user)):
+    # Cap team size to prevent a single team from absorbing the entire
+    # platform (and tilting the leaderboard).  Default cap is 10 —
+    # generous for a CTF, tight enough to require multiple teams.
+    MAX_TEAM_SIZE = 10
     async with async_session_factory() as session:
         result = await session.execute(select(Team).where(Team.id == team_id))
         team = result.scalar_one_or_none()
@@ -109,6 +113,19 @@ async def join_team(team_id: uuid.UUID, invite_code: str, current_user: User = D
         )
         if existing.scalar_one_or_none():
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Already a member")
+        # Count current members to enforce cap.  We do this after the
+        # duplicate check so a returning member gets the right 409.
+        from sqlalchemy import func as sa_func
+        member_count = (
+            await session.execute(
+                select(sa_func.count(TeamMember.id)).where(TeamMember.team_id == team_id)
+            )
+        ).scalar() or 0
+        if member_count >= MAX_TEAM_SIZE:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Team is full (max {MAX_TEAM_SIZE} members)",
+            )
         member = TeamMember(team_id=team.id, user_id=current_user.id, role="member")
         session.add(member)
         await session.commit()
@@ -135,7 +152,20 @@ async def leave_team(team_id: uuid.UUID, current_user: User = Depends(get_curren
 
 @router.get("/{team_id}/members")
 async def get_team_members(team_id: uuid.UUID, current_user: User = Depends(get_current_user)):
+    # Only the team owner or a member may view the member list.
+    # Previously, any authenticated caller could enumerate every
+    # team's members — a user-enumeration + team-roster leak.
     async with async_session_factory() as session:
+        team = (await session.execute(select(Team).where(Team.id == team_id))).scalar_one_or_none()
+        if team is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
+        is_owner = team.owner_id == current_user.id
+        is_member = await _user_is_member(session, team_id, current_user.id)
+        if not (is_owner or is_member or current_user.role == "admin"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You must be a member of this team to view its roster",
+            )
         result = await session.execute(
             select(TeamMember).where(TeamMember.team_id == team_id)
         )

@@ -1,4 +1,5 @@
 import hashlib
+import os
 import pathlib
 import uuid
 
@@ -33,6 +34,8 @@ _DIR_CATEGORY_MAP: dict[str, str] = {
     "zero-day": "Zero Day",
     "rabbit-holes": "Rabbit Holes",
     "boss": "Boss",
+    "supply-chain": "Supply Chain",
+    "other": "Other Notable",
 }
 
 
@@ -40,7 +43,9 @@ def _generate_deterministic_uuid(namespace: str, name: str) -> uuid.UUID:
     return uuid.uuid5(uuid.NAMESPACE_DNS, f"bheda/{namespace}/{name}")
 
 
-_CHALLENGES_DIR = pathlib.Path("/app/challenges")
+# Defaults to the in-container mount; overridable via CHALLENGES_DIR so the
+# seeder can run against a checkout (e.g. in tests) without the Docker path.
+_CHALLENGES_DIR = pathlib.Path(os.environ.get("CHALLENGES_DIR", "/app/challenges"))
 _CATEGORY_DEFAULTS: dict[str, tuple[str, str, int]] = {
     "Boss": ("skull", "#8B0000", 0),
     "TLS": ("lock", "#A9CCE3", 18),

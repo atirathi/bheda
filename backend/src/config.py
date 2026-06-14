@@ -66,9 +66,12 @@ class Settings(BaseSettings):
                 "the internal API key would be public. "
                 "Set API_KEY in the environment (or .env)."
             )
-        if self.mode not in ("practice", "competition", "exam"):
+        # "ctf" is the value used throughout deploy/compose, the README,
+        # and .env.example; it must be accepted or the backend refuses to
+        # boot in CTF mode.
+        if self.mode not in ("practice", "ctf", "competition", "exam"):
             raise RuntimeError(
-                f"Invalid MODE={self.mode!r}. Expected 'practice', 'competition', or 'exam'."
+                f"Invalid MODE={self.mode!r}. Expected 'practice', 'ctf', 'competition', or 'exam'."
             )
         if "*" in self.cors_origins:
             warnings.warn(

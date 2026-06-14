@@ -72,6 +72,13 @@ def _extract_client_ip(request: Request) -> str:
     return immediate_peer or "unknown"
 
 
+# Credential endpoints get a much tighter cap so the generic 100/min
+# limit can't be used to brute-force passwords (6000 guesses/hour/IP).
+_AUTH_PATHS = ("/api/v1/auth/login", "/api/v1/auth/register")
+_AUTH_MAX_REQUESTS = 10
+_AUTH_WINDOW_SECONDS = 60
+
+
 def create_rate_limit_middleware(
     max_requests: int = 100,
     window_seconds: int = 60,
@@ -83,26 +90,32 @@ def create_rate_limit_middleware(
         if route_path.startswith(("/docs", "/openapi.json", "/redoc")):
             return await call_next(request)
 
+        # Stricter bucket for credential endpoints.
+        if route_path in _AUTH_PATHS:
+            limit, window = _AUTH_MAX_REQUESTS, _AUTH_WINDOW_SECONDS
+        else:
+            limit, window = max_requests, window_seconds
+
         redis_conn = await get_redis()
         key = f"ratelimit:{client_ip}:{route_path}"
         now = time.time()
-        window_start = now - window_seconds
+        window_start = now - window
 
         await redis_conn.zremrangebyscore(key, 0, window_start)
         request_count = await redis_conn.zcard(key)
 
-        if request_count >= max_requests:
+        if request_count >= limit:
             return JSONResponse(
                 status_code=429,
                 content={"detail": "Too many requests. Please try again later."},
-                headers={"Retry-After": str(window_seconds)},
+                headers={"Retry-After": str(window)},
             )
 
         await redis_conn.zadd(key, {str(now): now})
-        await redis_conn.expire(key, window_seconds + 1)
+        await redis_conn.expire(key, window + 1)
 
         response = await call_next(request)
-        response.headers["X-RateLimit-Limit"] = str(max_requests)
-        response.headers["X-RateLimit-Remaining"] = str(max(0, max_requests - request_count - 1))
+        response.headers["X-RateLimit-Limit"] = str(limit)
+        response.headers["X-RateLimit-Remaining"] = str(max(0, limit - request_count - 1))
         return response
     return rate_limit_middleware

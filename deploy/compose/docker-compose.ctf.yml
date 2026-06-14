@@ -24,7 +24,10 @@ services:
       CTF_DEFAULT_EVENT_DURATION_HOURS: "48"
       ANTI_CHEAT_ENABLED: "true"
       PER_TEAM_INSTANCE_ENABLED: "true"
-      CORS_ORIGINS: "*"
+      # Set to the actual CTF frontend origin(s). "*" is unsafe with
+      # credentialed requests — any site could act on a participant's
+      # session — and only triggers a warning, not a hard failure.
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://bheda.ctf}
 
   # ─── Override CTF Engine for Competition Mode ───
   ctf-engine:

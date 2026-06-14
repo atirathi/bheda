@@ -58,6 +58,12 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(express.text({ limit: '10mb', type: 'text/xml' }));
 app.use(cookieParser());
 
+// Liveness probe — the compose healthcheck hits GET /health. Without
+// this route curl -f gets a 404 and the container is flagged unhealthy.
+app.get('/health', (_req, res) => {
+  res.json({ status: 'ok' });
+});
+
 app.get('/', (_req, res) => {
   res.json({
     name: 'Bheda Vulnerable Application',

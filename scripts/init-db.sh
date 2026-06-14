@@ -109,6 +109,7 @@ CREATE TABLE IF NOT EXISTS submissions (
     challenge_id UUID NOT NULL REFERENCES challenges(id),
     flag_hash VARCHAR(256) NOT NULL,
     correct BOOLEAN NOT NULL DEFAULT FALSE,
+    score INTEGER NOT NULL DEFAULT 0,
     ip_address VARCHAR(45),
     user_agent VARCHAR(512),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

@@ -110,7 +110,29 @@ class SubmissionService:
                         detail="Maximum attempts exceeded for this challenge",
                     )
 
-            # Chain dependencies.  Applies to BOTH routes.
+            # Idempotent solve: if this team/user already solved this
+            # challenge, don't accept another scoring submission — otherwise
+            # repeated correct submits would inflate the leaderboard.
+            solved_query = select(Submission.id).where(
+                Submission.challenge_id == chal.id,
+                Submission.correct.is_(True),
+            )
+            if team_id:
+                solved_query = solved_query.where(Submission.team_id == team_id)
+            else:
+                solved_query = solved_query.where(Submission.user_id == current_user.id)
+            already_solved = (await session.execute(solved_query)).first() is not None
+            if already_solved:
+                return {
+                    "submission_id": None,
+                    "status": "already_solved",
+                    "correct": True,
+                }
+
+            # Chain dependencies.  Applies to BOTH routes.  chain_depth feeds
+            # the scoring bonus: the more prerequisites cleared, the higher
+            # the multiplier.
+            chain_depth = 0
             if chal.requires:
                 for req_id in chal.requires:
                     dep_query = select(Submission).where(
@@ -127,9 +149,25 @@ class SubmissionService:
                             status_code=status.HTTP_400_BAD_REQUEST,
                             detail=f"Prerequisite challenge not solved: {req_id}",
                         )
+                    chain_depth += 1
 
             flag_hash = await ChallengeService.hash_flag(flag)
             correct = await ChallengeService.verify_flag(flag, chal.flag_hash)
+
+            score = 0
+            if correct:
+                # First blood = nobody has solved this challenge correctly yet.
+                first_blood = (
+                    await session.execute(
+                        select(Submission.id).where(
+                            Submission.challenge_id == chal.id,
+                            Submission.correct.is_(True),
+                        )
+                    )
+                ).first() is None
+                score = await ScoringService.calculate_score(
+                    chal, chain_depth=chain_depth, first_blood=first_blood
+                )
 
             submission = Submission(
                 user_id=current_user.id,
@@ -137,6 +175,7 @@ class SubmissionService:
                 challenge_id=chal.id,
                 flag_hash=flag_hash,
                 correct=correct,
+                score=score,
                 ip_address=SubmissionService._client_ip(request),
                 user_agent=(request.headers.get("user-agent") or "")[:512],
             )
@@ -156,6 +195,7 @@ class SubmissionService:
                 "submission_id": str(submission.id),
                 "status": "correct" if correct else "accepted",
                 "correct": correct,
+                "score": score,
             }
 
     @staticmethod

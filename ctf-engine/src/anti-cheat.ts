@@ -1,6 +1,5 @@
 import Redis from "ioredis";
 import axios from "axios";
-import { createHash } from "crypto";
 
 const REDIS_URL = process.env.REDIS_URL || "redis://localhost:6379";
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
@@ -82,17 +81,12 @@ export async function validateFlagUniqueness(flag: string): Promise<{ valid: boo
     }
   }
 
-  // Check hash uniqueness
-  const flagHash = createHash("sha256").update(flag).digest("hex");
-  const existingFlag = await redis.get(`anti-cheat:flag-hash:${flagHash}`);
-
-  if (existingFlag) {
-    return { valid: false, reason: "This flag has already been used in another challenge" };
-  }
-
-  // Register this flag hash
-  await redis.setex(`anti-cheat:flag-hash:${flagHash}`, 86400, "used");
-
+  // NOTE: We deliberately do NOT lock a flag hash globally after first
+  // use. With shared static flags every team submits the *same* correct
+  // value, so a global "already used" lock would freeze out every team
+  // after the first solver. Per-team double-counting is prevented by the
+  // already-solved check in the scoring path, and flag uniqueness across
+  // challenges is an authoring concern, not a runtime one.
   return { valid: true };
 }
 

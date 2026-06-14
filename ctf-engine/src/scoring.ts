@@ -43,13 +43,21 @@ interface ScoreResult {
   };
 }
 
+// Canonical scoring constants — MUST stay in sync with
+// backend/src/services/scoring_service.py (ScoringService). The two
+// services serve separate leaderboards (Redis vs Postgres); divergent
+// formulas rank teams differently.
 const DIFFICULTY_MULTIPLIERS: Record<string, number> = {
   beginner: 0.5,
   easy: 1.0,
   medium: 1.5,
   hard: 2.0,
   expert: 3.0,
+  insane: 3.0,
+  boss: 4.0,
 };
+const CHAIN_BONUS_PER_DEPTH = 0.15;
+const FIRST_BLOOD_MULTIPLIER = 1.5;
 
 // ─── Calculate flag score ───
 export async function calculateScore(submission: FlagSubmission, challenge: ChallengeConfig): Promise<ScoreResult> {
@@ -65,12 +73,12 @@ export async function calculateScore(submission: FlagSubmission, challenge: Chal
       if (solved) chainDepth++;
     }
   }
-  const chainMult = 1.0 + chainDepth * 0.15;
+  const chainMult = 1.0 + chainDepth * CHAIN_BONUS_PER_DEPTH;
 
   // First blood detection
   const firstBloodKey = `ctf:first-blood:${submission.event_id}:${submission.challenge_id}`;
   const isFirstBlood = await redis.setnx(firstBloodKey, submission.team_id) === 1;
-  const cleanBonus = isFirstBlood ? 1.5 : 1.0;
+  const cleanBonus = isFirstBlood ? FIRST_BLOOD_MULTIPLIER : 1.0;
 
   const totalScore = Math.round(base * diffMult * chainMult * cleanBonus);
 

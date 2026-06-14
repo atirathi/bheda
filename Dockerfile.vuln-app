@@ -1,7 +1,8 @@
 FROM node:22-slim
 
-# Create a non-root user for runtime.
-RUN groupadd -r -g 1000 bheda && useradd -r -u 1000 -g bheda -m -d /app bheda
+# Create a non-root user for runtime. Don't pin uid/gid 1000 — the node
+# base image already uses it for its `node` user, which would collide.
+RUN groupadd -r bheda && useradd -r -g bheda -m -d /app bheda
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
@@ -9,11 +10,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
+# Install ALL deps (incl. typescript, a devDependency) so the TS build
+# can run, then drop dev deps afterwards to keep the runtime image lean.
 COPY vuln-app/package.json vuln-app/tsconfig.json ./
-RUN npm install --omit=dev && npm cache clean --force
+RUN npm install && npm cache clean --force
 
 COPY --chown=bheda:bheda vuln-app/src ./src
-RUN npm run build
+RUN npm run build && npm prune --omit=dev
 
 EXPOSE 3000
 

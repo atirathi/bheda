@@ -37,7 +37,10 @@ services:
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./scripts/init-db.sh:/docker-entrypoint-initdb.d/init.sh
+      # initdb.d scripts run once, alphabetically: create the vuln-app's
+      # isolated database first, then the platform schema.
+      - ./scripts/init-vuln-db.sh:/docker-entrypoint-initdb.d/00-init-vuln-db.sh
+      - ./scripts/init-db.sh:/docker-entrypoint-initdb.d/01-init.sh
     # Bind to host loopback — DB is reachable only from the docker network
     # or from the host (e.g., for an operator running psql). Use an SSH tunnel
     # or a reverse proxy if remote access is required.
@@ -126,6 +129,8 @@ services:
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
       API_KEY: ${API_KEY:?API_KEY is required}
+      # Must equal the vuln-app's FLAG_SECRET — flags are derived from it.
+      FLAG_SECRET: ${FLAG_SECRET:?FLAG_SECRET is required}
       MODE: ${MODE:-practice}
       RABBIT_HOLES_ENABLED: ${RABBIT_HOLES_ENABLED:-true}
       SCHEDULER_ENABLED: ${SCHEDULER_ENABLED:-true}
@@ -200,7 +205,9 @@ services:
       # Generate fresh values with: openssl rand -base64 32
       PG_HOST: postgres
       PG_PORT: "5432"
-      PG_DB: ${POSTGRES_DB}
+      # Dedicated DB — keeps SQLi challenges away from the platform's real
+      # users/teams/submissions in ${POSTGRES_DB}.
+      PG_DB: ${VULN_DB:-bheda_vuln}
       PG_USER: ${POSTGRES_USER}
       PG_PASS: ${POSTGRES_PASSWORD}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0

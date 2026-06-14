@@ -1,15 +1,15 @@
 id: tls-01
-title: "TLS "
+title: "TLS self-signed certificate"
 category: tls
-difficulty: 
-cvss: 
+difficulty: easy
+cvss: 5.3
 owasp: A02:2021 – Cryptographic Failures
 endpoint: https://localhost:44301
-description: ""
+description: "The server on port 44301 presents a self-signed certificate that no trusted CA has issued. Inspect the certificate chain and retrieve the flag served once you accept the untrusted cert."
 hints:
   - "Use openssl s_client to inspect the certificate and cipher negotiation."
-  - "Force specific protocols or ciphers with -ssl3, -tls1, or -cipher flags."
-  - "Check for exposed files or debug endpoints on the server."
-flag: "BHEDA{tls_}"
+  - "A self-signed cert has the same issuer and subject — check both."
+  - "Bypass verification (e.g. curl -k) to read the response body."
+flag: "BHEDA{tls_self_signed}"
 flag_location: "HTTPS response body on port 44301"
-solution_summary: "Connect with appropriate openssl flags. For : openssl s_client -connect localhost:${PORT}"
+solution_summary: "openssl s_client -connect localhost:44301 reveals a self-signed cert (issuer == subject); curl -k https://localhost:44301 returns the flag."

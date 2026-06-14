@@ -6,7 +6,9 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/app.js",
-    "dev": "ts-node src/app.ts"
+    "dev": "ts-node src/app.ts",
+    "typecheck": "tsc --noEmit",
+    "test:flags": "ts-node --compiler-options '{\"module\":\"commonjs\"}' tests/sqli_flag_delivery.ts"
   },
   "dependencies": {
     "axios": "^1.7.0",

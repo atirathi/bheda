@@ -6,6 +6,8 @@ import uuid
 import yaml
 from sqlalchemy import select, text
 
+from src.utils.flag import generate_flag
+
 from src.database import async_session_factory
 from src.models.challenge import Challenge
 from src.models.category import Category
@@ -93,7 +95,12 @@ async def seed_challenges() -> int:
 
             title = data.get("title") or path.stem
             difficulty = str(data.get("difficulty", "medium")).lower()
-            flag = data.get("flag", "")
+            challenge_id_str = data.get("id", path.stem)
+            # Flags are deterministic, derived from FLAG_SECRET — NOT the
+            # (guessable, git-committed) `flag:` field in the YAML. The
+            # vuln-app embeds the same generated value in challenge data, so
+            # hashing it here lets the backend verify a real extracted flag.
+            flag = generate_flag(challenge_id_str)
             flag_hash = hashlib.sha256(flag.encode()).hexdigest()
             cvss = data.get("cvss")
             owasp = data.get("owasp")
@@ -101,7 +108,6 @@ async def seed_challenges() -> int:
             description = data.get("description", "")
             hints = data.get("hints") or []
             solution = data.get("solution_summary", "")
-            challenge_id_str = data.get("id", path.stem)
 
             dir_name = path.parent.name
             cat_name = _DIR_CATEGORY_MAP.get(dir_name)

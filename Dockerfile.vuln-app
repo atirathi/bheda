@@ -20,7 +20,7 @@ EXPOSE 3000
 ENV NODE_ENV=production
 ENV PG_HOST=postgres
 ENV PG_PORT=5432
-ENV PG_DB=bheda
+ENV PG_DB=bheda_vuln
 ENV PG_USER=bheda
 # PG_PASS and FLAG_SECRET MUST be provided at runtime — the
 # fail-fast asserts in db.ts and flag.ts refuse to start without them.

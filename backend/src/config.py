@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     secret_key: str = _DEFAULT_FAIL
     api_key: str = _DEFAULT_FAIL
+    # Shared with the vuln-app: flags are derived deterministically from
+    # this secret, so the backend can verify a submission without storing
+    # plaintext flags. MUST equal the vuln-app's FLAG_SECRET.
+    flag_secret: str = _DEFAULT_FAIL
     mode: str = "practice"
     profiles_enabled: bool = True
     rabbit_holes_enabled: bool = True
@@ -65,6 +69,16 @@ class Settings(BaseSettings):
                 "API_KEY is not set to a real value. Refusing to start: "
                 "the internal API key would be public. "
                 "Set API_KEY in the environment (or .env)."
+            )
+        if (
+            self.flag_secret == _DEFAULT_FAIL
+            or "CHANGE_ME" in self.flag_secret
+            or "REPLACE" in self.flag_secret
+        ):
+            raise RuntimeError(
+                "FLAG_SECRET is not set to a real value. Refusing to start: "
+                "flags are derived from it and would be publicly forgeable. "
+                "It MUST match the vuln-app's FLAG_SECRET."
             )
         # "ctf" is the value used throughout deploy/compose, the README,
         # and .env.example; it must be accepted or the backend refuses to

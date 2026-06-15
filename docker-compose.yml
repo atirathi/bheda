@@ -25,6 +25,26 @@ x-hardening: &default-hardening
   tmpfs:
     - /tmp:size=64m,mode=1777
 
+# The official postgres/redis/mongo images start as root, then chown their
+# data dir and drop to an unprivileged user (gosu/su-exec/setpriv). A blanket
+# cap_drop:ALL breaks that on a fresh volume ("operation not permitted"), so
+# these images get back only the caps that privilege-drop requires.
+x-db-hardening: &db-hardening
+  security_opt:
+    - "no-new-privileges:true"
+  cap_drop:
+    - ALL
+  cap_add:
+    - CHOWN
+    - DAC_OVERRIDE
+    - FOWNER
+    - SETGID
+    - SETUID
+    - SETPCAP
+  read_only: false
+  tmpfs:
+    - /tmp:size=64m,mode=1777
+
 services:
   # ─── Core Infrastructure ───
   postgres:
@@ -51,12 +71,17 @@ services:
     logging: *default-logging
     networks: [bheda-net]
     restart: unless-stopped
-    <<: *default-hardening
     # Postgres needs to write to its data dir; cannot be read-only.
+    <<: *db-hardening
 
   redis:
     image: redis:7.4-alpine
     container_name: bheda-redis
+    # The healthcheck authenticates with $REDIS_PASSWORD, so it must exist
+    # in the container env — passing it only as a --requirepass arg leaves
+    # the healthcheck unauthenticated (WRONGPASS → perpetually unhealthy).
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
     command:
       - redis-server
       - --requirepass
@@ -76,7 +101,7 @@ services:
     logging: *default-logging
     networks: [bheda-net]
     restart: unless-stopped
-    <<: *default-hardening
+    <<: *db-hardening
 
   mongodb:
     image: mongo:7.0
@@ -94,7 +119,7 @@ services:
     logging: *default-logging
     networks: [bheda-net]
     restart: unless-stopped
-    <<: *default-hardening
+    <<: *db-hardening
 
   minio:
     image: minio/minio:RELEASE.2024-10-13T13-34-11Z

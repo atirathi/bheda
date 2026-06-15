@@ -1,0 +1,3 @@
+# Keeps the Next.js public/ directory present so Dockerfile.frontend
+# (COPY --from=builder /app/public ./public) succeeds. Static assets
+# served at the web root can be added here.

@@ -1,5 +1,8 @@
 FROM node:22-alpine
 
+# curl is used by the compose healthcheck and is not in the base image.
+RUN apk add --no-cache curl
+
 WORKDIR /app
 
 # Create a non-root user for runtime.

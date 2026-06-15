@@ -1,5 +1,8 @@
 FROM node:22-alpine
 
+# curl is used by the compose healthcheck and is not in the base image.
+RUN apk add --no-cache curl
+
 WORKDIR /app
 
 # A non-root build/default user. We do NOT pin uid/gid 1000 — alpine's

@@ -213,7 +213,9 @@ services:
       - ./waf/bypass-rules:/etc/modsecurity/bypass-rules:ro
     healthcheck:
       <<: *healthcheck-defaults
-      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      # The nginx config serves the liveness endpoint at /healthz, not
+      # /health (which hits modsecurity and returns 400).
+      test: ["CMD", "curl", "-f", "http://localhost:80/healthz"]
     logging: *default-logging
     networks: [bheda-net]
     restart: unless-stopped

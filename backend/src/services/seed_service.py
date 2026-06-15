@@ -1,9 +1,12 @@
 import hashlib
+import os
 import pathlib
 import uuid
 
 import yaml
 from sqlalchemy import select, text
+
+from src.utils.flag import generate_flag
 
 from src.database import async_session_factory
 from src.models.challenge import Challenge
@@ -33,6 +36,8 @@ _DIR_CATEGORY_MAP: dict[str, str] = {
     "zero-day": "Zero Day",
     "rabbit-holes": "Rabbit Holes",
     "boss": "Boss",
+    "supply-chain": "Supply Chain",
+    "other": "Other Notable",
 }
 
 
@@ -40,7 +45,9 @@ def _generate_deterministic_uuid(namespace: str, name: str) -> uuid.UUID:
     return uuid.uuid5(uuid.NAMESPACE_DNS, f"bheda/{namespace}/{name}")
 
 
-_CHALLENGES_DIR = pathlib.Path("/app/challenges")
+# Defaults to the in-container mount; overridable via CHALLENGES_DIR so the
+# seeder can run against a checkout (e.g. in tests) without the Docker path.
+_CHALLENGES_DIR = pathlib.Path(os.environ.get("CHALLENGES_DIR", "/app/challenges"))
 _CATEGORY_DEFAULTS: dict[str, tuple[str, str, int]] = {
     "Boss": ("skull", "#8B0000", 0),
     "TLS": ("lock", "#A9CCE3", 18),
@@ -88,7 +95,12 @@ async def seed_challenges() -> int:
 
             title = data.get("title") or path.stem
             difficulty = str(data.get("difficulty", "medium")).lower()
-            flag = data.get("flag", "")
+            challenge_id_str = data.get("id", path.stem)
+            # Flags are deterministic, derived from FLAG_SECRET — NOT the
+            # (guessable, git-committed) `flag:` field in the YAML. The
+            # vuln-app embeds the same generated value in challenge data, so
+            # hashing it here lets the backend verify a real extracted flag.
+            flag = generate_flag(challenge_id_str)
             flag_hash = hashlib.sha256(flag.encode()).hexdigest()
             cvss = data.get("cvss")
             owasp = data.get("owasp")
@@ -96,7 +108,6 @@ async def seed_challenges() -> int:
             description = data.get("description", "")
             hints = data.get("hints") or []
             solution = data.get("solution_summary", "")
-            challenge_id_str = data.get("id", path.stem)
 
             dir_name = path.parent.name
             cat_name = _DIR_CATEGORY_MAP.get(dir_name)

@@ -25,6 +25,27 @@ x-hardening: &default-hardening
   tmpfs:
     - /tmp:size=64m,mode=1777
 
+# The official postgres/redis/mongo/nginx images start as root, then chown
+# their data/cache dirs and drop to an unprivileged user (gosu/su-exec/
+# setpriv, or nginx workers). A blanket cap_drop:ALL breaks that
+# ("operation not permitted"), so these images get back only the caps that
+# privilege-drop requires.
+x-db-hardening: &db-hardening
+  security_opt:
+    - "no-new-privileges:true"
+  cap_drop:
+    - ALL
+  cap_add:
+    - CHOWN
+    - DAC_OVERRIDE
+    - FOWNER
+    - SETGID
+    - SETUID
+    - SETPCAP
+  read_only: false
+  tmpfs:
+    - /tmp:size=64m,mode=1777
+
 services:
   # ─── Core Infrastructure ───
   postgres:
@@ -37,7 +58,10 @@ services:
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./scripts/init-db.sh:/docker-entrypoint-initdb.d/init.sh
+      # initdb.d scripts run once, alphabetically: create the vuln-app's
+      # isolated database first, then the platform schema.
+      - ./scripts/init-vuln-db.sh:/docker-entrypoint-initdb.d/00-init-vuln-db.sh
+      - ./scripts/init-db.sh:/docker-entrypoint-initdb.d/01-init.sh
     # Bind to host loopback — DB is reachable only from the docker network
     # or from the host (e.g., for an operator running psql). Use an SSH tunnel
     # or a reverse proxy if remote access is required.
@@ -48,12 +72,17 @@ services:
     logging: *default-logging
     networks: [bheda-net]
     restart: unless-stopped
-    <<: *default-hardening
     # Postgres needs to write to its data dir; cannot be read-only.
+    <<: *db-hardening
 
   redis:
     image: redis:7.4-alpine
     container_name: bheda-redis
+    # The healthcheck authenticates with $REDIS_PASSWORD, so it must exist
+    # in the container env — passing it only as a --requirepass arg leaves
+    # the healthcheck unauthenticated (WRONGPASS → perpetually unhealthy).
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
     command:
       - redis-server
       - --requirepass
@@ -73,7 +102,7 @@ services:
     logging: *default-logging
     networks: [bheda-net]
     restart: unless-stopped
-    <<: *default-hardening
+    <<: *db-hardening
 
   mongodb:
     image: mongo:7.0
@@ -91,7 +120,7 @@ services:
     logging: *default-logging
     networks: [bheda-net]
     restart: unless-stopped
-    <<: *default-hardening
+    <<: *db-hardening
 
   minio:
     image: minio/minio:RELEASE.2024-10-13T13-34-11Z
@@ -126,6 +155,8 @@ services:
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
       API_KEY: ${API_KEY:?API_KEY is required}
+      # Must equal the vuln-app's FLAG_SECRET — flags are derived from it.
+      FLAG_SECRET: ${FLAG_SECRET:?FLAG_SECRET is required}
       MODE: ${MODE:-practice}
       RABBIT_HOLES_ENABLED: ${RABBIT_HOLES_ENABLED:-true}
       SCHEDULER_ENABLED: ${SCHEDULER_ENABLED:-true}
@@ -160,8 +191,11 @@ services:
     # Loopback only — Traefik/WAF handle the public ingress.
     ports: ["127.0.0.1:3000:3000"]
     healthcheck:
+      # 127.0.0.1, not localhost — the Next server binds IPv4 0.0.0.0, but
+      # `localhost` resolves to IPv6 ::1 first, giving a false "connection
+      # refused" and a perpetually-unhealthy (but working) container.
       <<: *healthcheck-defaults
-      test: ["CMD", "wget", "--spider", "http://localhost:3000"]
+      test: ["CMD", "wget", "--spider", "http://127.0.0.1:3000"]
     logging: *default-logging
     networks: [bheda-net]
     restart: unless-stopped
@@ -179,11 +213,15 @@ services:
       - ./waf/bypass-rules:/etc/modsecurity/bypass-rules:ro
     healthcheck:
       <<: *healthcheck-defaults
-      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      # The nginx config serves the liveness endpoint at /healthz, not
+      # /health (which hits modsecurity and returns 400).
+      test: ["CMD", "curl", "-f", "http://localhost:80/healthz"]
     logging: *default-logging
     networks: [bheda-net]
     restart: unless-stopped
-    <<: *default-hardening
+    # nginx (modsecurity) drops to a worker user and chowns cache dirs —
+    # needs the privilege-drop caps, same as the other nginx services.
+    <<: *db-hardening
 
   # ─── Vulnerable App ───
   vuln-app:
@@ -200,15 +238,21 @@ services:
       # Generate fresh values with: openssl rand -base64 32
       PG_HOST: postgres
       PG_PORT: "5432"
-      PG_DB: ${POSTGRES_DB}
+      # Dedicated DB — keeps SQLi challenges away from the platform's real
+      # users/teams/submissions in ${POSTGRES_DB}.
+      PG_DB: ${VULN_DB:-bheda_vuln}
       PG_USER: ${POSTGRES_USER}
       PG_PASS: ${POSTGRES_PASSWORD}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       MONGO_URI: mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongodb:27017/bheda
       BACKEND_URL: http://backend:8000
       WAF_ENABLED: "true"
-      FLAG_SECRET: ${FLAG_SECRET}
+      FLAG_SECRET: ${FLAG_SECRET:?FLAG_SECRET is required}
       NODE_ENV: production
+      # app.ts defaults to PORT 3000; the port mapping and healthcheck
+      # below expect 3001, so it MUST be set explicitly or the container
+      # listens on the wrong port and every challenge becomes unreachable.
+      PORT: "3001"
     ports: ["127.0.0.1:3001:3001"]
     healthcheck:
       <<: *healthcheck-defaults
@@ -222,8 +266,9 @@ services:
       - "no-new-privileges:true"
     cap_drop:
       - ALL
-    cap_add:
-      - NET_BIND_SERVICE   # only if it needs to bind low ports; remove if not
+    # No cap_add — vuln-app binds 3001 (unprivileged), so NET_BIND_SERVICE
+    # is unnecessary and only widens the blast radius of intentionally
+    # vulnerable code.
     tmpfs:
       - /tmp:size=64m,mode=1777
 
@@ -357,7 +402,7 @@ services:
     networks: [bheda-net]
     restart: unless-stopped
 
-    <<: *default-hardening
+    <<: *db-hardening
   tls-02-expired:
     image: nginx:1.24-alpine
     container_name: bheda-tls-02
@@ -368,7 +413,7 @@ services:
     networks: [bheda-net]
     restart: unless-stopped
 
-    <<: *default-hardening
+    <<: *db-hardening
   tls-03-wildcard:
     image: nginx:1.24-alpine
     container_name: bheda-tls-03
@@ -379,7 +424,7 @@ services:
     networks: [bheda-net]
     restart: unless-stopped
 
-    <<: *default-hardening
+    <<: *db-hardening
   tls-04-cn-san-bypass:
     image: nginx:1.24-alpine
     container_name: bheda-tls-04
@@ -390,7 +435,7 @@ services:
     networks: [bheda-net]
     restart: unless-stopped
 
-    <<: *default-hardening
+    <<: *db-hardening
   tls-05-crl-disabled:
     image: nginx:1.24-alpine
     container_name: bheda-tls-05
@@ -402,7 +447,7 @@ services:
     networks: [bheda-net]
     restart: unless-stopped
 
-    <<: *default-hardening
+    <<: *db-hardening
   tls-06-rsa512:
     image: nginx:1.24-alpine
     container_name: bheda-tls-06
@@ -413,7 +458,7 @@ services:
     networks: [bheda-net]
     restart: unless-stopped
 
-    <<: *default-hardening
+    <<: *db-hardening
   tls-07-sslv3:
     image: nginx:1.24-alpine-slim
     container_name: bheda-tls-07
@@ -424,7 +469,7 @@ services:
     networks: [bheda-net]
     restart: unless-stopped
 
-    <<: *default-hardening
+    <<: *db-hardening
   tls-08-rc4:
     image: nginx:1.24-alpine
     container_name: bheda-tls-08
@@ -435,7 +480,7 @@ services:
     networks: [bheda-net]
     restart: unless-stopped
 
-    <<: *default-hardening
+    <<: *db-hardening
   tls-09-null-cipher:
     image: nginx:1.24-alpine
     container_name: bheda-tls-09
@@ -446,7 +491,7 @@ services:
     networks: [bheda-net]
     restart: unless-stopped
 
-    <<: *default-hardening
+    <<: *db-hardening
   tls-10-tls1-0-beast:
     image: nginx:1.24-alpine
     container_name: bheda-tls-10
@@ -457,7 +502,7 @@ services:
     networks: [bheda-net]
     restart: unless-stopped
 
-    <<: *default-hardening
+    <<: *db-hardening
   tls-11-export-dh:
     image: nginx:1.24-alpine
     container_name: bheda-tls-11
@@ -468,7 +513,7 @@ services:
     networks: [bheda-net]
     restart: unless-stopped
 
-    <<: *default-hardening
+    <<: *db-hardening
   tls-12-compression:
     image: nginx:1.24-alpine
     container_name: bheda-tls-12
@@ -479,7 +524,7 @@ services:
     networks: [bheda-net]
     restart: unless-stopped
 
-    <<: *default-hardening
+    <<: *db-hardening
   tls-13-heartbleed:
     image: nginx:1.24-alpine
     container_name: bheda-tls-13
@@ -490,7 +535,7 @@ services:
     networks: [bheda-net]
     restart: unless-stopped
 
-    <<: *default-hardening
+    <<: *db-hardening
   tls-14-renegotiation:
     image: nginx:1.24-alpine
     container_name: bheda-tls-14
@@ -501,7 +546,7 @@ services:
     networks: [bheda-net]
     restart: unless-stopped
 
-    <<: *default-hardening
+    <<: *db-hardening
   tls-15-session-ticket:
     image: nginx:1.24-alpine
     container_name: bheda-tls-15
@@ -513,7 +558,7 @@ services:
     networks: [bheda-net]
     restart: unless-stopped
 
-    <<: *default-hardening
+    <<: *db-hardening
   tls-16-breach:
     image: nginx:1.24-alpine
     container_name: bheda-tls-16
@@ -523,7 +568,7 @@ services:
       - ./tls-lab/certs/self-signed:/certs/self-signed:ro
     networks: [bheda-net]
     restart: unless-stopped
-    <<: *default-hardening
+    <<: *db-hardening
 
 networks:
   bheda-net:

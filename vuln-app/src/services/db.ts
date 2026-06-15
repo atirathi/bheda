@@ -1,5 +1,15 @@
 import { Pool } from 'pg';
 import { MongoClient } from 'mongodb';
+import { generateFlag } from '../utils/flag';
+
+// Challenges whose flag lives in the database for extraction via the
+// vulnerability (e.g. SQL injection UNION). Extend as categories are wired
+// up. Each id MUST match the challenge `id` the backend seeds, so the
+// deterministic flag hashes line up.
+const DB_FLAG_CHALLENGE_IDS: string[] = Array.from(
+  { length: 16 },
+  (_, i) => `sqli-${String(i + 1).padStart(2, '0')}`,
+);
 
 function requireEnv(name: string): string {
   const v = process.env[name];
@@ -85,7 +95,24 @@ export async function initDb() {
         path TEXT,
         created_at TIMESTAMP DEFAULT NOW()
       );
+
+      -- Flags live here so injection challenges can exfiltrate them
+      -- (e.g. ' UNION SELECT NULL, flag, ... FROM challenge_flags --).
+      -- The values are deterministic (generateFlag) and match what the
+      -- backend hashes, so an extracted flag validates on submission.
+      CREATE TABLE IF NOT EXISTS challenge_flags (
+        challenge_id TEXT PRIMARY KEY,
+        flag TEXT NOT NULL
+      );
     `);
+
+    for (const id of DB_FLAG_CHALLENGE_IDS) {
+      await client.query(
+        `INSERT INTO challenge_flags (challenge_id, flag) VALUES ($1, $2)
+         ON CONFLICT (challenge_id) DO UPDATE SET flag = EXCLUDED.flag`,
+        [id, generateFlag(id)],
+      );
+    }
   } finally {
     client.release();
   }

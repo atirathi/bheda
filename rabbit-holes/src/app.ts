@@ -463,12 +463,16 @@ app.all("*", (_req: Request, res: Response) => {
 });
 
 // ─── Start Server ───
-app.listen(PORT, () => {
-  console.log(`[rabbit-holes] listening on :${PORT}`);
-  console.log(`  decoys: ${Object.keys(decoys).length}`);
-  console.log(`  dead-end chains: ${deadEndChains.length}`);
-  console.log(`  circular resources: ${circularResources.length}`);
-  console.log(`  deceptive endpoints: ${deceptiveEndpoints.length}`);
-});
+// Skip when running as a honeypot — that mode already bound PORT above,
+// and starting again here would bind the same port twice (EADDRINUSE).
+if (!HONEYPOT_ROLE) {
+  app.listen(PORT, () => {
+    console.log(`[rabbit-holes] listening on :${PORT}`);
+    console.log(`  decoys: ${Object.keys(decoys).length}`);
+    console.log(`  dead-end chains: ${deadEndChains.length}`);
+    console.log(`  circular resources: ${circularResources.length}`);
+    console.log(`  deceptive endpoints: ${deceptiveEndpoints.length}`);
+  });
+}
 
 export default app;

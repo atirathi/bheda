@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     secret_key: str = _DEFAULT_FAIL
     api_key: str = _DEFAULT_FAIL
+    # Shared with the vuln-app: flags are derived deterministically from
+    # this secret, so the backend can verify a submission without storing
+    # plaintext flags. MUST equal the vuln-app's FLAG_SECRET.
+    flag_secret: str = _DEFAULT_FAIL
     mode: str = "practice"
     profiles_enabled: bool = True
     rabbit_holes_enabled: bool = True
@@ -66,9 +70,22 @@ class Settings(BaseSettings):
                 "the internal API key would be public. "
                 "Set API_KEY in the environment (or .env)."
             )
-        if self.mode not in ("practice", "competition", "exam"):
+        if (
+            self.flag_secret == _DEFAULT_FAIL
+            or "CHANGE_ME" in self.flag_secret
+            or "REPLACE" in self.flag_secret
+        ):
             raise RuntimeError(
-                f"Invalid MODE={self.mode!r}. Expected 'practice', 'competition', or 'exam'."
+                "FLAG_SECRET is not set to a real value. Refusing to start: "
+                "flags are derived from it and would be publicly forgeable. "
+                "It MUST match the vuln-app's FLAG_SECRET."
+            )
+        # "ctf" is the value used throughout deploy/compose, the README,
+        # and .env.example; it must be accepted or the backend refuses to
+        # boot in CTF mode.
+        if self.mode not in ("practice", "ctf", "competition", "exam"):
+            raise RuntimeError(
+                f"Invalid MODE={self.mode!r}. Expected 'practice', 'ctf', 'competition', or 'exam'."
             )
         if "*" in self.cors_origins:
             warnings.warn(

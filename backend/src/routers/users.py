@@ -68,12 +68,14 @@ async def update_user(
         if user is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
         update_data = body.model_dump(exclude_unset=True)
-        # Only admins may change `role` or `is_banned`; everything else
-        # (email, username, is_active) is open to the user themselves.
-        if ("role" in update_data or "is_banned" in update_data) and current_user.role != "admin":
+        # Only admins may change account-control fields; everything else
+        # (email, username) is open to the user themselves. `is_active` is
+        # admin-only too, so a user can't lock themselves out by flipping it.
+        ADMIN_ONLY_FIELDS = {"role", "is_banned", "is_active"}
+        if (ADMIN_ONLY_FIELDS & update_data.keys()) and current_user.role != "admin":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only admins can change role or ban status",
+                detail="Only admins can change role, ban, or active status",
             )
         # Prevent an admin from demoting themselves out of admin (lockout).
         if "role" in update_data and current_user.id == user_id and update_data["role"] != "admin":

@@ -12,3 +12,7 @@ tls-lab/certs/*.key
 # Build artifacts from `npm install` / `tsc` (regenerated on every build).
 package-lock.json
 tsconfig.tsbuildinfo
+
+# Test harness
+.venv/
+.pytest_cache/

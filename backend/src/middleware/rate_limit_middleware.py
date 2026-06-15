@@ -96,8 +96,18 @@ def create_rate_limit_middleware(
         else:
             limit, window = max_requests, window_seconds
 
+        # Bucket authenticated requests per-user, not per-IP. At an event
+        # where 200-500 players share a NAT (campus/venue), per-IP limiting
+        # would make them throttle each other. Login/register stays IP-based
+        # (no user yet) so brute-force protection is unaffected.
+        user = getattr(request.state, "user", None)
+        if user is not None and route_path not in _AUTH_PATHS:
+            identity = f"user:{user.id}"
+        else:
+            identity = f"ip:{client_ip}"
+
         redis_conn = await get_redis()
-        key = f"ratelimit:{client_ip}:{route_path}"
+        key = f"ratelimit:{identity}:{route_path}"
         now = time.time()
         window_start = now - window
 

@@ -184,12 +184,15 @@ class SubmissionService:
             await session.refresh(submission)
 
             if correct and active_event:
-                leaderboard = await ScoringService.recalculate_leaderboard(
+                # Throttled: under a burst of solves this recomputes+broadcasts
+                # at most once per interval instead of once per submission.
+                leaderboard = await ScoringService.recalculate_if_due(
                     str(active_event.id)
                 )
-                await manager.broadcast(
-                    {"type": "leaderboard_update", "data": leaderboard}
-                )
+                if leaderboard is not None:
+                    await manager.broadcast(
+                        {"type": "leaderboard_update", "data": leaderboard}
+                    )
 
             return {
                 "submission_id": str(submission.id),

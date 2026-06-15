@@ -16,6 +16,12 @@ from src.models.team import Team
 CHAIN_BONUS_PER_DEPTH = 0.15
 FIRST_BLOOD_MULTIPLIER = 1.5
 
+# Leaderboard caching/throttling (seconds). The cache TTL bounds staleness
+# on the GET path; the recalc interval bounds how often the expensive
+# aggregation + broadcast fires on the solve path under burst load.
+LEADERBOARD_CACHE_TTL = 10
+LEADERBOARD_RECALC_INTERVAL = 3
+
 
 class ScoringService:
     DIFFICULTY_MULTIPLIER = {
@@ -109,8 +115,33 @@ class ScoringService:
                 })
 
             redis_conn = await get_redis()
-            await redis_conn.set("leaderboard:data", json.dumps(leaderboard))
+            # TTL so the cache self-refreshes via the GET path; bounds how
+            # stale the leaderboard can get even if no new solves arrive.
+            await redis_conn.set(
+                "leaderboard:data", json.dumps(leaderboard), ex=LEADERBOARD_CACHE_TTL
+            )
             return leaderboard
+
+    @staticmethod
+    async def recalculate_if_due(
+        event_id: str | None = None,
+        min_interval: int = LEADERBOARD_RECALC_INTERVAL,
+    ) -> list[dict] | None:
+        """Throttled recalc for the hot solve path.
+
+        A full recalculate + websocket broadcast on EVERY correct
+        submission is a thundering herd during a busy event (hundreds of
+        teams solving at once). This runs the heavy recompute at most once
+        per `min_interval` seconds per event using a Redis NX lock, and
+        returns None when throttled so the caller skips the broadcast. The
+        TTL'd cache + GET path keep the board eventually fresh.
+        """
+        redis_conn = await get_redis()
+        lock_key = f"leaderboard:recalc-throttle:{event_id or 'global'}"
+        acquired = await redis_conn.set(lock_key, "1", nx=True, ex=max(min_interval, 1))
+        if not acquired:
+            return None
+        return await ScoringService.recalculate_leaderboard(event_id)
 
     @staticmethod
     async def get_cached_leaderboard() -> list[dict] | None:

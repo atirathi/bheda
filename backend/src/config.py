@@ -37,6 +37,13 @@ class Settings(BaseSettings):
     scheduler_enabled: bool = True
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 60
+    # DB connection pool, per uvicorn worker. Cluster total =
+    # WEB_CONCURRENCY * (db_pool_size + db_max_overflow); keep that under
+    # Postgres max_connections (set in docker-compose) or workers get
+    # "too many connections" under load.
+    db_pool_size: int = 10
+    db_max_overflow: int = 10
+    db_pool_timeout: int = 30
     # Default CORS allowlist.  We refuse to start with `*` because
     # that combined with credentialed requests is a CSRF amplifier.
     # Operators MUST set `CORS_ORIGINS` to the public origin(s) of
@@ -54,7 +61,14 @@ class Settings(BaseSettings):
     # (`total_challenges`, `active_users`, `ctf_active`).
     public_stats_enabled: bool = True
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    # extra=ignore: the deployment env / .env also holds vars for other
+    # services (MINIO_*, MONGO_*, VULN_DB, ...). The backend must ignore
+    # those rather than refuse to start.
+    model_config = {
+        "env_file": ".env",
+        "env_file_encoding": "utf-8",
+        "extra": "ignore",
+    }
 
     def assert_safe(self) -> None:
         """Call once at startup to refuse boot with placeholder secrets."""

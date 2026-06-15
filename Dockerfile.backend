@@ -25,4 +25,7 @@ EXPOSE 8000
 
 USER bheda
 
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+# Worker count tunable via WEB_CONCURRENCY (default 4). Set it to roughly
+# the host's core count; remember each worker opens its own DB pool, so
+# raising it also raises total DB connections (see db_pool_size).
+CMD ["sh", "-c", "uvicorn src.main:app --host 0.0.0.0 --port 8000 --workers ${WEB_CONCURRENCY:-4}"]
